@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Bastion Autofill",
+  "version": "1.0.1",
+  "description": "Autofill credentials from your Bastion vault",
+  "permissions": ["activeTab", "storage", "scripting", "tabs", "webNavigation"],
+  "host_permissions": ["http://localhost:59432/*", "<all_urls>"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_idle",
+    "all_frames": true,
+    "match_about_blank": true
+  }],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
