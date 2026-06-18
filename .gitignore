@@ -1,11 +1,9 @@
 bin/
 obj/
 .vs/
-
+release/
+vault.dat
 *.user
 *.suo
-
-vault.dat
+*.bastion-backup
 *.bastion-share
-
-*.log

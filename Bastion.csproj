@@ -3,8 +3,10 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Bastion.ico</ApplicationIcon>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Bastion_GitHub_Source\**;AthenaScholar\**;Sentinel\**;threatlens\**;release\**;_export_check_obj\**;_export_check_bin\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Bastion.ico" />

@@ -426,6 +426,66 @@
             </Setter>
         </Style>
 
+        <Style x:Key="BastionMenuItem" TargetType="{x:Type MenuItem}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <Grid Margin="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#2D2D2D"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#666666"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BastionContextMenu" TargetType="{x:Type ContextMenu}">
+            <Setter Property="Background" Value="#1A1A1A"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="BorderBrush" Value="#333333"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContextMenu}">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type Separator}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Separator}">
+                        <Border Height="1" Background="#333333" Margin="4,4"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Dark ComboBox with working popup using correct WPF PART_ names -->
         <Style x:Key="DarkCombo" TargetType="ComboBox">
             <Setter Property="Background" Value="#252525"/>
@@ -715,35 +775,35 @@
                                         <TextBlock Text="Release Timeline" FontSize="15" FontWeight="SemiBold"
                                                    Foreground="#E8E8E8" DockPanel.Dock="Left"
                                                    Margin="0,0,15,0"/>
-                                        <TextBlock Text="Latest: v2.9.15" FontSize="11" Foreground="#7C3AED"
+                                        <TextBlock Text="Latest: v2.9.20" FontSize="11" Foreground="#7C3AED"
                                                    DockPanel.Dock="Right" VerticalAlignment="Center"/>
                                     </DockPanel>
 
                                     <StackPanel>
                                         <Border BorderBrush="#7C3AED" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,0,0,18">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.15" FontSize="13" FontWeight="SemiBold" Foreground="#E8E8E8"/>
-                                                <TextBlock Text="Sidebar navigation state fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Moved active sidebar highlight to explicit named row backgrounds&#x0a;- Kept nav buttons transparent so stale button styles cannot highlight Home&#x0a;- Active tab now follows the visible page directly"
+                                                <TextBlock Text="v2.9.20" FontSize="13" FontWeight="SemiBold" Foreground="#E8E8E8"/>
+                                                <TextBlock Text="Installer first-launch vault fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Fixed installed builds creating or opening the vault from the install folder instead of the user's app data folder&#x0a;- Moved the encrypted vault to %APPDATA%\Bastion\vault.dat for reliable first launch and normal Windows permissions&#x0a;- Added automatic migration from older relative vault.dat locations when a valid legacy vault is found&#x0a;- Improved login error messages so storage problems are shown separately from incorrect master passwords"
                                                            TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
 
                                         <Border BorderBrush="#333333" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,0,0,18">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.14" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
-                                                <TextBlock Text="Settings control polish" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Removed accent-colored checkbox fill and border from Settings&#x0a;- Fixed nav highlight by deriving active tab from the visible page&#x0a;- Stopped active navigation state relying on stale styles"
+                                                <TextBlock Text="v2.9.19" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
+                                                <TextBlock Text="Tray mode, extension polish, and graph connection tuning" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Restored the graph's always-connected proximity web while keeping stronger relevance lines for related notes&#x0a;- Moved appearance color maps into dropdown pickers with visible hex values&#x0a;- Reworked the browser extension popup and replaced blocking save prompts with a small non-blocking page card&#x0a;- Added duplicate checks before prompts and saves so already-saved credentials are skipped&#x0a;- Added tray/background mode plus Windows startup and hidden-to-tray startup controls"
                                                            TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
 
                                         <Border BorderBrush="#333333" BorderThickness="2,0,0,0" Padding="12,0,0,0">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.13" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
-                                                <TextBlock Text="Password toolbar theme fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Fixed Password Manager search box carrying light colors into dark mode&#x0a;- Explicitly themed Password Manager action buttons after theme changes&#x0a;- Improved dark/light contrast for password toolbar controls"
-                                                           TextWrapping="Wrap" FontSize="12" Foreground="#999999"/>
+                                                <TextBlock Text="v2.9.18" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
+                                                <TextBlock Text="Inline notes, color maps, and relevance graph" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Moved image and file attachments into the same note editing flow with paste support&#x0a;- Added free color-map controls for accent, graph colors, and per-tag colors&#x0a;- Rebuilt graph links around title, tag, folder, body keyword, and topic relevance, plus a softer graph background&#x0a;- Fixed note autosave so Enter and blank lines no longer move the cursor or disappear"
+                                                           TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>
@@ -899,10 +959,6 @@
                             <Border Grid.Row="0" Background="#141414" Padding="16,8">
                                 <DockPanel>
                                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                        <Button x:Name="BtnEditMode" Content="Edit" Style="{StaticResource ToolbarBtn}"
-                                                Margin="0,0,4,0" Height="26" FontSize="11" Click="SwitchToEdit_Click"/>
-                                        <Button x:Name="BtnPreviewMode" Content="Preview" Style="{StaticResource GhostBtn}"
-                                                Margin="0,0,4,0" Height="26" FontSize="11" Click="SwitchToPreview_Click"/>
                                         <Button Content="History" Style="{StaticResource GhostBtn}"
                                                 Margin="0,0,4,0" Height="26" FontSize="11" Click="ShowHistory_Click"/>
                                         <Button x:Name="BtnPinNote" Content="📌" Style="{StaticResource GhostBtn}"
@@ -925,23 +981,28 @@
                                              Background="Transparent" BorderThickness="0"
                                              SelectionBrush="#7C3AED" TextChanged="NoteContent_Changed"/>
                                 </Border>
-                                <TextBox x:Name="NoteBodyEditor" Grid.Row="1"
-                                         AcceptsReturn="True" TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Background="#161616" Foreground="#CCCCCC"
-                                         CaretBrush="#7C3AED" SelectionBrush="#7C3AED"
-                                          BorderThickness="0" FontFamily="Consolas" FontSize="14"
-                                          Padding="28,14" TextChanged="NoteContent_Changed"
-                                          AllowDrop="True" Drop="NoteBodyEditor_Drop"
-                                          SpellCheck.IsEnabled="True"/>
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#161616">
+                                    <StackPanel>
+                                        <TextBox x:Name="NoteBodyEditor"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Disabled"
+                                                 MinHeight="390"
+                                                 Background="#161616" Foreground="#CCCCCC"
+                                                 CaretBrush="#7C3AED" SelectionBrush="#7C3AED"
+                                                 BorderThickness="0" FontFamily="Consolas" FontSize="14"
+                                                 Padding="28,14,28,10" TextChanged="NoteContent_Changed"
+                                                 PreviewKeyDown="NoteBodyEditor_PreviewKeyDown"
+                                                 AllowDrop="True" Drop="NoteBodyEditor_Drop"
+                                                 SpellCheck.IsEnabled="True"/>
+                                        <Border x:Name="InlineAttachmentsHost"
+                                                Background="Transparent"
+                                                Padding="28,0,28,22"
+                                                Visibility="Collapsed">
+                                            <WrapPanel x:Name="InlineAttachmentsPanel"/>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
                             </Grid>
-                            <ScrollViewer x:Name="PreviewPanel" Grid.Row="1"
-                                          VerticalScrollBarVisibility="Auto" Visibility="Collapsed"
-                                          Background="#161616" Padding="28,18">
-                                <RichTextBox x:Name="PreviewBox" Background="Transparent"
-                                             BorderThickness="0" Foreground="#CCCCCC"
-                                             FontSize="14" IsReadOnly="True" FontFamily="Segoe UI"/>
-                            </ScrollViewer>
                             <Border Grid.Row="2" Background="#141414" Padding="16,5">
                                 <DockPanel>
                                     <TextBlock x:Name="NoteWordCount" Text="0 words"
@@ -982,7 +1043,32 @@
                                     <Button Content="+ Attach File" Style="{StaticResource GhostBtn}" Height="24" FontSize="11"
                                             Margin="0,0,0,8" Click="AttachFile_Click"/>
                                     <ListBox x:Name="AttachmentsList" Background="Transparent" BorderThickness="0"
-                                             Margin="0,0,0,16" MouseDoubleClick="Attachment_DoubleClick"/>
+                                             ItemContainerStyle="{StaticResource NoteFileItem}"
+                                             Margin="0,0,0,16" MouseDoubleClick="Attachment_DoubleClick">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid MinWidth="220">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                        <TextBlock Text="{Binding FileName}" FontSize="12"
+                                                                   Foreground="#BBBBBB"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Details}" FontSize="10"
+                                                                   Foreground="#666666"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" Content="Remove"
+                                                            Style="{StaticResource GhostBtn}"
+                                                            Height="22" FontSize="10" Padding="6,0"
+                                                            Tag="{Binding Id}"
+                                                            Click="RemoveAttachment_Click"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
                                     <Rectangle Height="1" Fill="#222222" Margin="0,0,0,16"/>
                                      <TextBlock Text="OUTLINE" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,12"/>
                                     <ListBox x:Name="OutlineList" Background="Transparent" BorderThickness="0"
@@ -1043,12 +1129,19 @@
                                 </StackPanel>
                             </DockPanel>
                         </Border>
-                        <Canvas x:Name="GraphCanvas" Grid.Row="1" Background="#161616"
+                        <Canvas x:Name="GraphCanvas" Grid.Row="1"
                                 MouseDown="GraphCanvas_MouseDown"
                                 MouseMove="GraphCanvas_MouseMove"
                                 MouseUp="GraphCanvas_MouseUp"
                                 MouseWheel="GraphCanvas_MouseWheel"
                                 ClipToBounds="True">
+                            <Canvas.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#111318" Offset="0"/>
+                                    <GradientStop Color="#16111A" Offset="0.46"/>
+                                    <GradientStop Color="#171717" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Canvas.Background>
                             <Canvas x:Name="GraphInnerCanvas"/>
                         </Canvas>
                     </Grid>
@@ -1108,9 +1201,10 @@
                                                     </Setter>
                                                 </Style>
                                             </GridView.ColumnHeaderContainerStyle>
-                                            <GridViewColumn Header="TITLE" Width="200" DisplayMemberBinding="{Binding Title}"/>
-                                            <GridViewColumn Header="USERNAME" Width="180" DisplayMemberBinding="{Binding Username}"/>
-                                            <GridViewColumn Header="STRENGTH" Width="140" DisplayMemberBinding="{Binding StrengthLabel}"/>
+                                            <GridViewColumn Header="TITLE" Width="170" DisplayMemberBinding="{Binding Title}"/>
+                                            <GridViewColumn Header="USERNAME" Width="150" DisplayMemberBinding="{Binding Username}"/>
+                                            <GridViewColumn Header="STRENGTH" Width="120" DisplayMemberBinding="{Binding StrengthLabel}"/>
+                                            <GridViewColumn Header="DETAILS" Width="220" DisplayMemberBinding="{Binding Details}"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -1173,68 +1267,183 @@
                         <Border x:Name="SettingsHeader" Grid.Row="0" Background="#141414" Padding="16,10">
                             <TextBlock Text="Settings" FontSize="15" FontWeight="SemiBold" Foreground="#E8E8E8"/>
                         </Border>
-                        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" Padding="32,24">
-                            <StackPanel MaxWidth="500">
-                                <TextBlock Text="VAULT" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,12"/>
-                                <Button Content="Import passwords from CSV" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="ImportCsv_Click" Margin="0,0,0,8"/>
-                                <Button Content="Export encrypted share" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="ExportEncryptedShare_Click" Margin="0,0,0,8"/>
-                                <Button Content="Import encrypted share" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="ImportEncryptedShare_Click" Margin="0,0,0,8"/>
-                                <Button Content="How encrypted shares work" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="ShowEncryptedShareInfo_Click" Margin="0,0,0,8"/>
-                                <TextBlock Text="Encrypted shares are .bastion-share files containing a password-protected copy of passwords and notes. To import one, choose the file, enter the password used when it was exported, and Bastion merges non-duplicate items into this vault."
-                                           Foreground="#555555" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" Padding="28,22">
+                            <StackPanel MaxWidth="880">
+                                <TextBlock Text="Vault controls, extension access, lock timing, and appearance."
+                                           Foreground="#666666" FontSize="12" Margin="0,0,0,18"/>
 
-                                <Rectangle Height="1" Fill="#222222" Margin="0,20,0,20"/>
+                                <Border Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="VAULT" FontSize="10" FontWeight="SemiBold" Foreground="#777777"/>
+                                            <TextBlock Text="Import, backup, and share data." FontSize="11" Foreground="#555555" TextWrapping="Wrap" Margin="0,6,18,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <WrapPanel Margin="0,0,0,10">
+                                                <Button Content="Import CSV" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="ImportCsv_Click" Margin="0,0,8,8"/>
+                                                <Button Content="Create backup" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="CreateVaultBackup_Click" Margin="0,0,8,8"/>
+                                                <Button Content="Restore backup" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="RestoreVaultBackup_Click" Margin="0,0,8,8"/>
+                                                <Button Content="Export share" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="ExportEncryptedShare_Click" Margin="0,0,8,8"/>
+                                                <Button Content="Import share" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="ImportEncryptedShare_Click" Margin="0,0,8,8"/>
+                                                <Button Content="Share guide" Style="{StaticResource GhostBtn}" Height="32" Padding="14,0" Click="ShowEncryptedShareInfo_Click" Margin="0,0,8,8"/>
+                                            </WrapPanel>
+                                            <TextBlock Text="Backups are full encrypted vault copies. Shares are portable encrypted exports that merge non-duplicate passwords, notes, tags, and attachments."
+                                                       Foreground="#777777" FontSize="12" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
 
-                                <TextBlock Text="AUTO-LOCK" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,8"/>
-                                <TextBlock Text="Lock vault after inactivity:" Foreground="#777777" FontSize="13" Margin="0,0,0,10"/>
-                                <ComboBox x:Name="LockTimeoutCombo" Style="{StaticResource DarkCombo}"
-                                          Width="220" HorizontalAlignment="Left"
-                                          SelectionChanged="LockTimeout_Changed">
-                                    <ComboBoxItem Content="1 minute" Tag="1"/>
-                                    <ComboBoxItem Content="2 minutes" Tag="2"/>
-                                    <ComboBoxItem Content="3 minutes" Tag="3" IsSelected="True"/>
-                                    <ComboBoxItem Content="5 minutes" Tag="5"/>
-                                    <ComboBoxItem Content="10 minutes" Tag="10"/>
-                                    <ComboBoxItem Content="15 minutes" Tag="15"/>
-                                    <ComboBoxItem Content="30 minutes" Tag="30"/>
-                                    <ComboBoxItem Content="Never" Tag="0"/>
-                                </ComboBox>
+                                <Border Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="SECURITY" FontSize="10" FontWeight="SemiBold" Foreground="#777777"/>
+                                            <TextBlock Text="Lock timing and clipboard cleanup." FontSize="11" Foreground="#555555" TextWrapping="Wrap" Margin="0,6,18,0"/>
+                                        </StackPanel>
+                                        <Grid Grid.Column="1">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="240"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,18,14">
+                                                <TextBlock Text="Auto-lock" Foreground="#CCCCCC" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="Lock the vault after inactivity." Foreground="#666666" FontSize="11"/>
+                                            </StackPanel>
+                                            <ComboBox x:Name="LockTimeoutCombo" Grid.Row="0" Grid.Column="1" Style="{StaticResource DarkCombo}" Width="220" HorizontalAlignment="Left" SelectionChanged="LockTimeout_Changed">
+                                                <ComboBoxItem Content="1 minute" Tag="1"/>
+                                                <ComboBoxItem Content="2 minutes" Tag="2"/>
+                                                <ComboBoxItem Content="3 minutes" Tag="3" IsSelected="True"/>
+                                                <ComboBoxItem Content="5 minutes" Tag="5"/>
+                                                <ComboBoxItem Content="10 minutes" Tag="10"/>
+                                                <ComboBoxItem Content="15 minutes" Tag="15"/>
+                                                <ComboBoxItem Content="30 minutes" Tag="30"/>
+                                                <ComboBoxItem Content="Never" Tag="0"/>
+                                            </ComboBox>
+                                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,18,0">
+                                                <TextBlock Text="Clipboard timeout" Foreground="#CCCCCC" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="Clear copied passwords and 2FA codes automatically." Foreground="#666666" FontSize="11"/>
+                                            </StackPanel>
+                                            <ComboBox x:Name="ClipboardTimeoutCombo" Grid.Row="1" Grid.Column="1" Style="{StaticResource DarkCombo}" Width="220" HorizontalAlignment="Left" SelectionChanged="ClipboardTimeout_Changed">
+                                                <ComboBoxItem Content="5 seconds" Tag="5"/>
+                                                <ComboBoxItem Content="10 seconds" Tag="10"/>
+                                                <ComboBoxItem Content="15 seconds" Tag="15" IsSelected="True"/>
+                                                <ComboBoxItem Content="30 seconds" Tag="30"/>
+                                                <ComboBoxItem Content="60 seconds" Tag="60"/>
+                                                <ComboBoxItem Content="Never" Tag="0"/>
+                                            </ComboBox>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
 
-                                <Rectangle Height="1" Fill="#222222" Margin="0,20,0,20"/>
-                                <TextBlock Text="BROWSER EXTENSION" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,8"/>
-                                <TextBlock Text="Enable autofill in Chrome or Firefox using the Bastion extension." Foreground="#777777" FontSize="13" Margin="0,0,0,10" TextWrapping="Wrap"/>
-                                <CheckBox x:Name="AutofillEnabledCheck" Content="Enable browser autofill" Foreground="#999999"
-                                          Margin="0,0,0,10" Checked="AutofillEnabled_Changed" Unchecked="AutofillEnabled_Changed"/>
-                                <Button Content="Show Session Token" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="ShowAutofillToken_Click" Margin="0,0,0,6"/>
-                                <TextBlock Text="Load the BrowserExtension/ folder as an unpacked extension in Chrome (chrome://extensions → Load unpacked) or Firefox (about:debugging → Load Temporary Add-on)."
-                                           Foreground="#444444" FontSize="11" TextWrapping="Wrap"/>
+                                <Border Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="BROWSER EXTENSION" FontSize="10" FontWeight="SemiBold" Foreground="#777777"/>
+                                            <TextBlock Text="Local autofill bridge." FontSize="11" Foreground="#555555" TextWrapping="Wrap" Margin="0,6,18,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <CheckBox x:Name="AutofillEnabledCheck" Content="Enable browser autofill" Foreground="#999999" Margin="0,0,0,10" Checked="AutofillEnabled_Changed" Unchecked="AutofillEnabled_Changed"/>
+                                            <CheckBox x:Name="RunInTrayCheck" Content="Keep Bastion running in the system tray when minimized or closed" Foreground="#999999" Margin="0,0,0,10" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
+                                            <CheckBox x:Name="StartOnBootCheck" Content="Start Bastion when Windows starts" Foreground="#999999" Margin="0,0,0,10" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
+                                            <CheckBox x:Name="StartHiddenToTrayCheck" Content="Start hidden in tray until unlocked" Foreground="#999999" Margin="0,0,0,12" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
+                                            <Button Content="Show session token" Style="{StaticResource GhostBtn}" HorizontalAlignment="Left" Height="32" Padding="14,0" Click="ShowAutofillToken_Click" Margin="0,0,0,8"/>
+                                            <TextBlock Text="Load BrowserExtension/ as an unpacked Chrome or Firefox extension. Autofill only works after the vault is unlocked and locks again when the vault auto-locks."
+                                                       Foreground="#666666" FontSize="12" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
 
-                                <Rectangle Height="1" Fill="#222222" Margin="0,20,0,20"/>
-                                <TextBlock Text="APPEARANCE" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,12"/>
-                                <CheckBox x:Name="DarkThemeCheck" Content="Dark theme" Foreground="#999999"
-                                          Margin="0,0,0,8" Checked="Theme_Changed" Unchecked="Theme_Changed"/>
-                                <TextBlock Text="Accent color" Foreground="#777777" FontSize="13" Margin="0,0,0,6"/>
-                                <TextBox x:Name="AccentColorBox" Style="{StaticResource DarkInput}" Width="120" HorizontalAlignment="Left"
-                                         TextChanged="AccentColor_Changed" Margin="0,0,0,10"/>
+                                <Border Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,0,0,14">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="APPEARANCE" FontSize="10" FontWeight="SemiBold" Foreground="#777777"/>
+                                            <TextBlock Text="Theme and graph colours." FontSize="11" Foreground="#555555" TextWrapping="Wrap" Margin="0,6,18,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <CheckBox x:Name="DarkThemeCheck" Content="Dark theme" Foreground="#999999" Margin="0,0,0,16" Checked="Theme_Changed" Unchecked="Theme_Changed"/>
+                                            <UniformGrid Columns="2">
+                                                <Expander Margin="0,0,12,12" Foreground="#CCCCCC" Background="Transparent">
+                                                    <Expander.Header>
+                                                        <DockPanel MinWidth="300">
+                                                            <TextBlock Text="Accent color" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
+                                                            <Border x:Name="AccentColorPreview" Width="26" Height="26" CornerRadius="5" BorderBrush="#333333" BorderThickness="1" Margin="0,0,8,0"/>
+                                                            <TextBox x:Name="AccentColorBox" Style="{StaticResource DarkInput}" Width="116" Height="26" TextChanged="AccentColor_Changed"/>
+                                                        </DockPanel>
+                                                    </Expander.Header>
+                                                    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="7" Height="104" ClipToBounds="True" Margin="0,8,0,0">
+                                                        <Image x:Name="AccentColorMap" Stretch="Fill" Cursor="Cross"
+                                                               Tag="Accent" MouseLeftButtonDown="ColorMap_MouseLeftButtonDown"
+                                                               MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
+                                                    </Border>
+                                                </Expander>
+                                                <Expander Margin="12,0,0,12" Foreground="#CCCCCC" Background="Transparent">
+                                                    <Expander.Header>
+                                                        <DockPanel MinWidth="300">
+                                                            <TextBlock Text="Graph node" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
+                                                            <Border x:Name="GraphNodeColorPreview" Width="26" Height="26" CornerRadius="5" BorderBrush="#333333" BorderThickness="1" Margin="0,0,8,0"/>
+                                                            <TextBox x:Name="GraphNodeColorBox" Style="{StaticResource DarkInput}" Width="116" Height="26" TextChanged="GraphColorText_Changed"/>
+                                                        </DockPanel>
+                                                    </Expander.Header>
+                                                    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="7" Height="104" ClipToBounds="True" Margin="0,8,0,0">
+                                                        <Image x:Name="GraphNodeColorMap" Stretch="Fill" Cursor="Cross"
+                                                               Tag="GraphNode" MouseLeftButtonDown="ColorMap_MouseLeftButtonDown"
+                                                               MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
+                                                    </Border>
+                                                </Expander>
+                                                <Expander Margin="0,0,12,0" Foreground="#CCCCCC" Background="Transparent">
+                                                    <Expander.Header>
+                                                        <DockPanel MinWidth="300">
+                                                            <TextBlock Text="Graph hub" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
+                                                            <Border x:Name="GraphHubColorPreview" Width="26" Height="26" CornerRadius="5" BorderBrush="#333333" BorderThickness="1" Margin="0,0,8,0"/>
+                                                            <TextBox x:Name="GraphHubColorBox" Style="{StaticResource DarkInput}" Width="116" Height="26" TextChanged="GraphColorText_Changed"/>
+                                                        </DockPanel>
+                                                    </Expander.Header>
+                                                    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="7" Height="104" ClipToBounds="True" Margin="0,8,0,0">
+                                                        <Image x:Name="GraphHubColorMap" Stretch="Fill" Cursor="Cross"
+                                                               Tag="GraphHub" MouseLeftButtonDown="ColorMap_MouseLeftButtonDown"
+                                                               MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
+                                                    </Border>
+                                                </Expander>
+                                                <Expander Margin="12,0,0,0" Foreground="#CCCCCC" Background="Transparent">
+                                                    <Expander.Header>
+                                                        <DockPanel MinWidth="300">
+                                                            <TextBlock Text="Graph line" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
+                                                            <Border x:Name="GraphLineColorPreview" Width="26" Height="26" CornerRadius="5" BorderBrush="#333333" BorderThickness="1" Margin="0,0,8,0"/>
+                                                            <TextBox x:Name="GraphLineColorBox" Style="{StaticResource DarkInput}" Width="116" Height="26" TextChanged="GraphColorText_Changed"/>
+                                                        </DockPanel>
+                                                    </Expander.Header>
+                                                    <Border BorderBrush="#333333" BorderThickness="1" CornerRadius="7" Height="104" ClipToBounds="True" Margin="0,8,0,0">
+                                                        <Image x:Name="GraphLineColorMap" Stretch="Fill" Cursor="Cross"
+                                                               Tag="GraphLine" MouseLeftButtonDown="ColorMap_MouseLeftButtonDown"
+                                                               MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
+                                                    </Border>
+                                                </Expander>
+                                            </UniformGrid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
 
-                                <Rectangle Height="1" Fill="#222222" Margin="0,20,0,20"/>
-                                <TextBlock Text="GRAPH COLORS" FontSize="10" FontWeight="SemiBold" Foreground="#444444" Margin="0,0,0,12"/>
-                                <TextBlock Text="Customize node and line colors in the graph view." Foreground="#777777" FontSize="13" Margin="0,0,0,10"/>
-                                <Button Content="Open Color Settings" Style="{StaticResource GhostBtn}"
-                                        HorizontalAlignment="Left" Height="32" Padding="16,0"
-                                        Click="OpenGraphColors_Click"/>
-                                <TextBlock Foreground="#555555" FontSize="13">
-                                    <Run Text="Bastion v2.9.15  ·  AES-256-GCM  ·  Local-first"/>
+                                <TextBlock Foreground="#555555" FontSize="12" Margin="2,2,0,0">
+                                    <Run Text="Bastion v2.9.20  ·  AES-256-GCM  ·  Local-first"/>
                                 </TextBlock>
                             </StackPanel>
                         </ScrollViewer>

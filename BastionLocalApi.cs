@@ -126,7 +126,7 @@ public class BastionLocalApi : IDisposable
             // GET /bastion/ping
             if (path.EndsWith("/ping"))
             {
-                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.1\"}");
+                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.3\"}");
                 return;
             }
 
@@ -168,7 +168,14 @@ public class BastionLocalApi : IDisposable
 
                 var existing = FindCredential(request);
                 var exactMatch = existing != null && existing.Password == request.Password;
-                Write(ctx, JsonSerializer.Serialize(new { exists = exactMatch, usernameMatch = existing != null }, JsonOptions));
+                Write(ctx, JsonSerializer.Serialize(new
+                {
+                    exists = exactMatch,
+                    usernameMatch = existing != null,
+                    status = exactMatch ? "exists" : existing != null ? "update" : "new",
+                    id = existing?.Id ?? "",
+                    title = existing?.Title ?? ""
+                }, JsonOptions));
                 return;
             }
 
@@ -199,11 +206,19 @@ public class BastionLocalApi : IDisposable
                 }
                 else
                 {
+                    if (existing.Password == request.Password)
+                    {
+                        Write(ctx, JsonSerializer.Serialize(new { status = "exists", duplicate = true }, JsonOptions));
+                        return;
+                    }
+
                     existing.Password = request.Password;
+                    existing.Url = string.IsNullOrWhiteSpace(existing.Url) ? request.Url : existing.Url;
+                    existing.Title = string.IsNullOrWhiteSpace(existing.Title) ? request.Title : existing.Title;
                     existing.UpdatedAt = DateTime.Now;
                 }
                 _saveVault?.Invoke();
-                Write(ctx, "{\"status\":\"saved\"}");
+                Write(ctx, JsonSerializer.Serialize(new { status = existing == null ? "created" : "updated" }, JsonOptions));
                 return;
             }
 

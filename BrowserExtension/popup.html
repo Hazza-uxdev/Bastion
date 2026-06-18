@@ -3,23 +3,169 @@
 <head>
 <meta charset="utf-8">
 <style>
-  body { width:260px; background:#161616; color:#E8E8E8; font-family:Segoe UI,sans-serif; margin:0; }
-  .header { background:#141414; padding:14px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #222; }
-  .logo { background:linear-gradient(135deg,#7C3AED,#4C1D95); border-radius:6px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:14px; }
-  h1 { margin:0; font-size:14px; font-weight:600; }
-  .status { padding:14px 16px; font-size:13px; color:#777; }
-  .status.ok  { color:#4ADE80; }
-  .status.err { color:#EF4444; }
-  .hint { font-size:11px; color:#444; padding:0 16px 16px; line-height:1.5; }
+  :root {
+    color-scheme: dark;
+    --bg: #111111;
+    --panel: #181818;
+    --panel-2: #1f1f1f;
+    --border: #303030;
+    --text: #f1f1f1;
+    --muted: #8d8d8d;
+    --accent: #7c3aed;
+    --ok: #4ade80;
+    --warn: #facc15;
+    --err: #fb7185;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    width: 318px;
+    margin: 0;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(124, 58, 237, 0.18), transparent 34%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+
+  .shell { padding: 12px; }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .logo {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #06b6d4);
+    color: white;
+    font-weight: 800;
+    box-shadow: 0 10px 24px rgba(124, 58, 237, 0.28);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .version {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  .status {
+    padding: 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(24, 24, 24, 0.94);
+  }
+
+  .status-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 7px;
+  }
+
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 99px;
+    background: var(--warn);
+    box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.12);
+  }
+
+  .status.ok .dot {
+    background: var(--ok);
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.12);
+  }
+
+  .status.err .dot {
+    background: var(--err);
+    box-shadow: 0 0 0 4px rgba(251, 113, 133, 0.12);
+  }
+
+  .status-title {
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .status-copy {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  button {
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    font: 600 12px "Segoe UI", system-ui, sans-serif;
+    cursor: pointer;
+    padding: 0 11px;
+  }
+
+  button.primary {
+    flex: 1;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+  }
+
+  button:hover {
+    filter: brightness(1.12);
+  }
+
+  .footer {
+    margin-top: 11px;
+    color: #6f6f6f;
+    font-size: 11px;
+    line-height: 1.4;
+  }
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="logo">🔒</div>
-  <h1>Bastion Autofill</h1>
-</div>
-<div class="status" id="status">Checking connection…</div>
-<p class="hint">Make sure Bastion is running. The extension connects automatically — no setup needed.</p>
-<script src="popup.js"></script>
+  <div class="shell">
+    <div class="header">
+      <div class="logo">B</div>
+      <div>
+        <h1>Bastion Autofill</h1>
+        <div class="version">Extension v1.0.3</div>
+      </div>
+    </div>
+
+    <div class="status" id="status">
+      <div class="status-top">
+        <div class="dot"></div>
+        <div class="status-title" id="statusTitle">Checking Bastion</div>
+      </div>
+      <div class="status-copy" id="statusCopy">Looking for the local vault bridge...</div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="refresh">Refresh</button>
+    </div>
+
+    <div class="footer">Bastion only talks to the local desktop app. Unlock the vault once before autofill can access saved passwords.</div>
+  </div>
+  <script src="popup.js"></script>
 </body>
 </html>

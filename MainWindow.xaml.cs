@@ -33,19 +33,25 @@ public partial class MainWindow : Window
     private int _lockMinutes = 3;
 
     private SecureNote? _currentNote;
-    private bool _isEditMode = true;
     private bool _suppressNoteChange = false;
+    private bool _suppressNoteTreeSelection = false;
     private string _currentSortMode = "LastEdited";
 
     // Browser autofill API
     private BastionLocalApi? _localApi;
+    private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private bool _allowExit;
+    private readonly bool _startHiddenToTray;
 
     // Tag filter state
     private string? _activeTagFilter = null;
     private string? _activePasswordTagFilter = null;
     private bool _isUpdatingSettingsControls = false;
+    private bool _isUpdatingColorText = false;
     private Button? _activeNavButton;
     private readonly Dictionary<DependencyObject, ThemeSnapshot> _themeSnapshots = new();
+    private BitmapSource? _colorMapSource;
+    private const int MaxAttachmentBytes = 10 * 1024 * 1024;
 
     // Graph
     private double _graphOffsetX = 0, _graphOffsetY = 0, _graphScale = 1.0;
@@ -57,11 +63,12 @@ public partial class MainWindow : Window
     private readonly Dictionary<SecureNote, (double x, double y)> _nodePositions = new();
     // Smooth graph animation state — declared in graph region below
 
-    public MainWindow(Vault vault, string password)
+    public MainWindow(Vault vault, string password, bool startHiddenToTray = false)
     {
         InitializeComponent();
         _vault = vault;
         _password = password;
+        _startHiddenToTray = startHiddenToTray;
 
         _lockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(_lockMinutes) };
         _lockTimer.Tick += (_, _) => Lock();
@@ -76,13 +83,24 @@ public partial class MainWindow : Window
         NormalizeVault();
         _lockMinutes = Math.Clamp(_vault.Settings.LockMinutes, 0, 120);
         ApplyLockTimeout(_lockMinutes, save: false);
+        LoadGraphColors();
         UpdateSettingsControls();
         VaultList.ItemsSource = _vault.Entries;
 
         MouseMove += (_, _) => ResetLockTimer();
         KeyDown += (_, _) => ResetLockTimer();
 
-        // Start local API bridge for browser extension
+        StartLocalApi();
+
+        ApplyTheme();
+        UpdateGreeting();
+        ShowHome();
+        Loaded += MainWindow_Loaded;
+    }
+
+    private void StartLocalApi()
+    {
+        _localApi?.Stop();
         _localApi = new BastionLocalApi(_vault, () => Dispatcher.Invoke(() =>
         {
             VaultStore.Save(_vault, _password);
@@ -90,11 +108,6 @@ public partial class MainWindow : Window
             UpdateHomeStats();
         }));
         _localApi.Start();
-
-        LoadGraphColors();
-        ApplyTheme();
-        UpdateGreeting();
-        ShowHome();
     }
 
     private void NormalizeVault()
@@ -106,6 +119,10 @@ public partial class MainWindow : Window
         _vault.Folders ??= new List<string>();
         _vault.Settings ??= new VaultSettings();
         _vault.Settings.LockMinutes = Math.Clamp(_vault.Settings.LockMinutes, 0, 120);
+        _vault.Settings.ClipboardTimeoutSeconds = Math.Clamp(_vault.Settings.ClipboardTimeoutSeconds, 0, 300);
+        if (!_vault.Settings.StartOnBoot)
+            _vault.Settings.StartHiddenToTray = false;
+        _vault.Settings.TagColors ??= new Dictionary<string, string>();
         _vault.Tags ??= new List<string>();
         foreach (var entry in _vault.Entries)
         {
@@ -143,8 +160,63 @@ public partial class MainWindow : Window
     {
         if (WindowState == WindowState.Maximized) { RootBorder.BorderThickness = new Thickness(0); MaxHeight = SystemParameters.WorkArea.Height + 7; }
         else { RootBorder.BorderThickness = new Thickness(1); MaxHeight = double.PositiveInfinity; }
+        if (WindowState == WindowState.Minimized && _vault?.Settings?.RunInTray == true)
+            Dispatcher.BeginInvoke(new Action(() => HideToTray("Bastion is still running in the tray.")), DispatcherPriority.Background);
     }
     private void CloseApp_Click(object sender, RoutedEventArgs e) { SaveCurrentNote(); Close(); }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_vault.Settings.RunInTray || _startHiddenToTray)
+            EnsureTrayIcon();
+        if (_startHiddenToTray)
+            HideToTray("Bastion unlocked. Browser autofill is available while the vault stays unlocked.");
+    }
+
+    private void EnsureTrayIcon()
+    {
+        if (_trayIcon != null) return;
+
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        menu.Items.Add("Open Bastion", null, (_, _) => ShowFromTray());
+        menu.Items.Add("Lock vault", null, (_, _) => Dispatcher.Invoke(Lock));
+        menu.Items.Add("Exit", null, (_, _) => Dispatcher.Invoke(ExitFromTray));
+
+        _trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath)
+                   ?? System.Drawing.SystemIcons.Application,
+            Text = "Bastion vault unlocked",
+            Visible = true,
+            ContextMenuStrip = menu
+        };
+        _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
+    }
+
+    private void HideToTray(string? balloonText = null)
+    {
+        EnsureTrayIcon();
+        Hide();
+        if (!string.IsNullOrWhiteSpace(balloonText))
+            _trayIcon?.ShowBalloonTip(2500, "Bastion", balloonText, System.Windows.Forms.ToolTipIcon.Info);
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ExitFromTray()
+    {
+        _allowExit = true;
+        SaveCurrentNote();
+        _localApi?.Stop();
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        Application.Current.Shutdown();
+    }
 
     // ---- HOME ----
     private void UpdateGreeting() { var h = DateTime.Now.Hour; HomeGreeting.Text = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
@@ -216,7 +288,10 @@ public partial class MainWindow : Window
         _totpTimer.Stop();
         CompositionTarget.Rendering -= GraphRenderFrame;
         _localApi?.Stop();
+        _trayIcon?.Dispose();
+        _trayIcon = null;
         new LoginWindow().Show();
+        _allowExit = true;
         Close();
     }
     private void LockTimeout_Changed(object sender, SelectionChangedEventArgs e)
@@ -290,8 +365,15 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(value)) return;
 
         Clipboard.SetText(value);
-        NoteSaveStatus.Text = $"{label} copied - clears in 15s";
-        await Task.Delay(15000);
+        var timeout = Math.Clamp(_vault?.Settings?.ClipboardTimeoutSeconds ?? 15, 0, 300);
+        if (timeout <= 0)
+        {
+            NoteSaveStatus.Text = $"{label} copied.";
+            return;
+        }
+
+        NoteSaveStatus.Text = $"{label} copied - clears in {timeout}s";
+        await Task.Delay(TimeSpan.FromSeconds(timeout));
         if (Clipboard.ContainsText() && Clipboard.GetText() == value)
         {
             Clipboard.Clear();
@@ -352,15 +434,14 @@ public partial class MainWindow : Window
                 SyncVaultTags();
                 VaultStore.Save(_vault, _password);
                 RefreshPasswordList();
-            });
-            chip.Background = _activePasswordTagFilter == tag
-                ? new SolidColorBrush(Color.FromRgb(0x3A, 0x25, 0x66))
-                : new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22));
-            chip.MouseLeftButtonDown += (_, _) =>
+            }, () =>
             {
                 _activePasswordTagFilter = _activePasswordTagFilter == tag ? null : tag;
                 RefreshPasswordList();
-            };
+            });
+            chip.Background = _activePasswordTagFilter == tag
+                ? new SolidColorBrush(BlendColor(Color.FromRgb(0x16, 0x16, 0x16), GetTagColor(tag), 0.36))
+                : new SolidColorBrush(BlendColor(Color.FromRgb(0x22, 0x22, 0x22), GetTagColor(tag), 0.16));
             PasswordTagsPanel.Children.Add(chip);
         }
     }
@@ -536,14 +617,14 @@ public partial class MainWindow : Window
         var item = new ListBoxItem { Content = sp, Tag = note, Padding = new Thickness(8, 6, 8, 6) };
 
         // Right-click context menu: Move to folder
-        var ctx = new ContextMenu { Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)), BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)) };
+        var ctx = CreateBastionContextMenu();
 
-        var moveHeader = new MenuItem { Header = "Move to folder", IsEnabled = false, Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)), FontSize = 11 };
+        var moveHeader = CreateBastionMenuItem("Move to folder", isEnabled: false);
         ctx.Items.Add(moveHeader);
         ctx.Items.Add(new Separator());
 
         // No folder option
-        var noFolder = new MenuItem { Header = "(No folder)", Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)), Background = Brushes.Transparent };
+        var noFolder = CreateBastionMenuItem("(No folder)");
         noFolder.Click += (_, _) => { note.Folder = ""; VaultStore.Save(_vault, _password); RefreshNotesTree(); };
         ctx.Items.Add(noFolder);
 
@@ -552,6 +633,9 @@ public partial class MainWindow : Window
         {
             var f = folder;
             var mi = new MenuItem { Header = "📁 " + f, Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)), Background = Brushes.Transparent };
+            mi.Header = "Folder: " + f;
+            mi.MinWidth = 150;
+            if (TryFindResource("BastionMenuItem") is Style folderStyle) mi.Style = folderStyle;
             mi.Click += (_, _) => { note.Folder = f; VaultStore.Save(_vault, _password); RefreshNotesTree(); };
             ctx.Items.Add(mi);
         }
@@ -559,6 +643,9 @@ public partial class MainWindow : Window
         // New folder option
         ctx.Items.Add(new Separator());
         var newFolderMi = new MenuItem { Header = "+ New folder…", Foreground = new SolidColorBrush(Color.FromRgb(0x7C, 0x3A, 0xED)), Background = Brushes.Transparent };
+        newFolderMi.Header = "+ New folder...";
+        newFolderMi.MinWidth = 150;
+        if (TryFindResource("BastionMenuItem") is Style newFolderStyle) newFolderMi.Style = newFolderStyle;
         newFolderMi.Click += (_, _) =>
         {
             var dlg = new FolderNameDialog { Owner = Application.Current.MainWindow };
@@ -567,7 +654,40 @@ public partial class MainWindow : Window
         };
         ctx.Items.Add(newFolderMi);
 
+        ctx.Items.Add(new Separator());
+        var deleteNoteMi = CreateBastionMenuItem("Delete note", foregroundHex: "#F87171");
+        deleteNoteMi.Click += (_, _) => DeleteNote(note);
+        ctx.Items.Add(deleteNoteMi);
+
         item.ContextMenu = ctx;
+        return item;
+    }
+
+    private ContextMenu CreateBastionContextMenu()
+    {
+        var menu = new ContextMenu
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4)
+        };
+        if (TryFindResource("BastionContextMenu") is Style style)
+            menu.Style = style;
+        return menu;
+    }
+
+    private MenuItem CreateBastionMenuItem(string header, bool isEnabled = true, string foregroundHex = "#CCCCCC")
+    {
+        var item = new MenuItem
+        {
+            Header = header,
+            IsEnabled = isEnabled,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(foregroundHex)),
+            Background = Brushes.Transparent
+        };
+        if (TryFindResource("BastionMenuItem") is Style style)
+            item.Style = style;
         return item;
     }
 
@@ -603,8 +723,25 @@ public partial class MainWindow : Window
 
     private void NotesTree_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressNoteTreeSelection) return;
         if (NotesTree.SelectedItem is ListBoxItem { Tag: SecureNote note })
             OpenNote(note);
+    }
+
+    private void RefreshNotesTreeKeepingSelection()
+    {
+        var selectedNote = _currentNote;
+        _suppressNoteTreeSelection = true;
+        try
+        {
+            RefreshNotesTree();
+            if (selectedNote != null)
+                SelectNoteInTree(selectedNote);
+        }
+        finally
+        {
+            _suppressNoteTreeSelection = false;
+        }
     }
 
     private void SelectNoteInTree(SecureNote note)
@@ -687,7 +824,7 @@ public partial class MainWindow : Window
         _suppressNoteChange = true;
         _currentNote = note;
         NoteTitleEditor.Text = note.Title;
-        NoteBodyEditor.Text = note.Body;
+        NoteBodyEditor.Text = StripAttachmentLinks(note.Body);
         NoteEditorTitle.Text = note.Title;
         NoteCreatedText.Text = note.CreatedAt.ToString("MMM d, yyyy");
         NoteModifiedText.Text = note.UpdatedAt.ToString("MMM d, yyyy HH:mm");
@@ -695,7 +832,6 @@ public partial class MainWindow : Window
         UpdateWordCount(); UpdateOutline();
         RefreshNoteTags();
         RefreshAttachments();
-        if (!_isEditMode) RenderPreview();
         _suppressNoteChange = false;
     }
 
@@ -713,8 +849,9 @@ public partial class MainWindow : Window
         if (_currentNote == null) return;
 
         // Take snapshot if body changed significantly (>10 chars diff)
+        var oldTitle = _currentNote.Title ?? "";
         var oldBody = _currentNote.Body ?? "";
-        var newBody = NoteBodyEditor.Text ?? "";
+        var newBody = StripAttachmentLinks(NoteBodyEditor.Text ?? "");
         if (Math.Abs(newBody.Length - oldBody.Length) > 10 || (_currentNote.History.Count == 0 && newBody.Length > 0))
         {
             _currentNote.History.Add(new NoteSnapshot
@@ -722,7 +859,7 @@ public partial class MainWindow : Window
                 SavedAt = DateTime.Now,
                 Body = "",
                 CompressedBodyBase64 = CompressText(oldBody),
-                Title = _currentNote.Title,
+                Title = _currentNote.Title ?? "",
                 IsFullCopy = true
             });
             // Keep last 50 snapshots
@@ -732,9 +869,21 @@ public partial class MainWindow : Window
 
         _currentNote.Title = NoteTitleEditor.Text.Trim().Length > 0 ? NoteTitleEditor.Text.Trim() : "Untitled";
         _currentNote.Body = newBody;
+        if (NoteBodyEditor.Text != newBody)
+        {
+            var selectionStart = NoteBodyEditor.SelectionStart;
+            var selectionLength = NoteBodyEditor.SelectionLength;
+            _suppressNoteChange = true;
+            NoteBodyEditor.Text = newBody;
+            var safeStart = Math.Min(selectionStart, NoteBodyEditor.Text.Length);
+            var safeLength = Math.Min(selectionLength, Math.Max(0, NoteBodyEditor.Text.Length - safeStart));
+            NoteBodyEditor.Select(safeStart, safeLength);
+            _suppressNoteChange = false;
+        }
         _currentNote.UpdatedAt = DateTime.Now;
         VaultStore.Save(_vault, _password);
-        if (NotesTree != null) RefreshNotesTree();
+        if (NotesTree != null && !string.Equals(oldTitle, _currentNote.Title, StringComparison.Ordinal))
+            RefreshNotesTreeKeepingSelection();
         UpdateHomeStats();
         UpdateBacklinks();
         NoteSaveStatus.Text = $"Saved · {DateTime.Now:HH:mm:ss}";
@@ -744,6 +893,9 @@ public partial class MainWindow : Window
     private void DeleteNote_Click(object sender, RoutedEventArgs e)
     {
         if (_currentNote == null) return;
+        DeleteNote(_currentNote);
+        /*
+        return;
         var dlg = new BastionDialog($"Delete \"{_currentNote.Title}\"?", "This note will be moved to Trash.", true);
         if (dlg.ShowDialog() == true)
         {
@@ -761,6 +913,54 @@ public partial class MainWindow : Window
         }
     }
 
+        */
+    }
+
+    private void DeleteNote(SecureNote note)
+    {
+        var dlg = new BastionDialog($"Delete \"{note.Title}\"?", "This note will be moved to Trash.", true) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+
+        var wasCurrent = ReferenceEquals(_currentNote, note);
+        _vault.Notes.Remove(note);
+        _vault.NoteTrash.Add(note);
+        if (wasCurrent) _currentNote = null;
+
+        VaultStore.Save(_vault, _password);
+        RefreshNotesTree();
+        UpdateHomeStats();
+        if (wasCurrent) ClearCurrentNoteUi();
+    }
+
+    private void ClearCurrentNoteUi()
+    {
+        _suppressNoteChange = true;
+        NoteTitleEditor.Text = "";
+        NoteBodyEditor.Text = "";
+        NoteEditorTitle.Text = "Select or create a note";
+        NoteCreatedText.Text = NoteModifiedText.Text = NoteWordCountPanel.Text = "—";
+        NoteFolderText.Text = "—";
+        NoteWordCount.Text = "0 words";
+        NoteTagsPanel.Children.Clear();
+        AttachmentsList.ItemsSource = null;
+        InlineAttachmentsPanel.Children.Clear();
+        InlineAttachmentsHost.Visibility = Visibility.Collapsed;
+        OutlineList.ItemsSource = null;
+        BacklinksList.ItemsSource = null;
+        _suppressNoteChange = false;
+    }
+
+    private static string StripAttachmentLinks(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text ?? "";
+        var cleaned = Regex.Replace(
+            text,
+            @"^\s*\[attachment:[^\]]+\]\(bastion-attachment://[A-Za-z0-9-]+\)\s*$\r?\n?",
+            "",
+            RegexOptions.Multiline);
+        return cleaned;
+    }
+
     private void UpdateWordCount()
     {
         var w = NoteBodyEditor.Text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
@@ -776,15 +976,9 @@ public partial class MainWindow : Window
         OutlineList.ItemsSource = headers.Count > 0 ? (IEnumerable<string>)headers : new List<string> { "No headings" };
     }
 
-    private void OutlineList_Click(object sender, SelectionChangedEventArgs e) { if (!_isEditMode) SwitchToEdit_Click(sender, new RoutedEventArgs()); }
+    private void OutlineList_Click(object sender, SelectionChangedEventArgs e) { NoteBodyEditor.Focus(); }
 
-    private void SwitchToEdit_Click(object sender, RoutedEventArgs e)
-    { _isEditMode = true; EditPanel.Visibility = Visibility.Visible; PreviewPanel.Visibility = Visibility.Collapsed; BtnEditMode.Style = (Style)FindResource("ToolbarBtn"); BtnPreviewMode.Style = (Style)FindResource("GhostBtn"); }
-
-    private void SwitchToPreview_Click(object sender, RoutedEventArgs e)
-    { _isEditMode = false; SaveCurrentNote(); RenderPreview(); EditPanel.Visibility = Visibility.Collapsed; PreviewPanel.Visibility = Visibility.Visible; BtnEditMode.Style = (Style)FindResource("GhostBtn"); BtnPreviewMode.Style = (Style)FindResource("ToolbarBtn"); }
-
-    private void RenderPreview() { PreviewBox.Document.Blocks.Clear(); RenderMarkdownToRichText(NoteBodyEditor.Text ?? "", PreviewBox.Document); }
+    private void RenderPreview() => RefreshInlineAttachments();
 
     private void RenderMarkdownToRichText(string md, FlowDocument doc)
     {
@@ -817,18 +1011,53 @@ public partial class MainWindow : Window
         if (attachment == null) return false;
         if (attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            var bytes = Convert.FromBase64String(attachment.DataBase64);
-            var image = new BitmapImage();
-            using var stream = new MemoryStream(bytes);
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.StreamSource = stream;
-            image.EndInit();
-            image.Freeze();
-            doc.Blocks.Add(new BlockUIContainer(new Image { Source = image, MaxWidth = 520, Margin = new Thickness(0, 8, 0, 8) }));
-            return true;
+            try
+            {
+                var bytes = Convert.FromBase64String(attachment.DataBase64);
+                var image = new BitmapImage();
+                using var stream = new MemoryStream(bytes);
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.StreamSource = stream;
+                image.EndInit();
+                image.Freeze();
+
+                var panel = new StackPanel();
+                panel.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x12)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(6),
+                    Child = new Image
+                    {
+                        Source = image,
+                        MaxWidth = 520,
+                        MaxHeight = 360,
+                        Stretch = Stretch.Uniform,
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    }
+                });
+                panel.Children.Add(new TextBlock
+                {
+                    Text = attachment.FileName,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 4, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+                doc.Blocks.Add(new BlockUIContainer(panel) { Margin = new Thickness(0, 8, 0, 12) });
+                return true;
+            }
+            catch
+            {
+                doc.Blocks.Add(MakePara($"Image attachment could not be previewed: {attachment.FileName}", 13, FontWeights.Normal, "#AAAAAA", 4, 4));
+                return true;
+            }
         }
-        doc.Blocks.Add(MakePara($"Attachment: {attachment.FileName}", 13, FontWeights.Normal, "#AAAAAA", 4, 4));
+
+        doc.Blocks.Add(MakePara($"Attachment: {attachment.FileName} ({FormatFileSize(GetAttachmentSizeBytes(attachment))})", 13, FontWeights.Normal, "#AAAAAA", 4, 4));
         return true;
     }
 
@@ -865,6 +1094,8 @@ public partial class MainWindow : Window
     public Color GraphHubColor  { get; set; } = Color.FromRgb(0xFF, 0x00, 0xCC);
     public Color GraphLineColor { get; set; } = Color.FromArgb(140, 0, 200, 220);
 
+    private sealed record GraphLink(SecureNote A, SecureNote B, double Score, bool Explicit);
+
     private void BuildGraph()
     {
         // Stop old render hook
@@ -879,12 +1110,13 @@ public partial class MainWindow : Window
         double cx = GraphCanvas.ActualWidth  > 10 ? GraphCanvas.ActualWidth  / 2 : 500;
         double cy = GraphCanvas.ActualHeight > 10 ? GraphCanvas.ActualHeight / 2 : 320;
 
-        // Connection counts
+        var links = BuildGraphLinks(notes);
         var connCount = notes.ToDictionary(n => n, _ => 0);
-        foreach (var a in notes)
-            foreach (var b in notes)
-                if (a != b && (a.Body ?? "").Contains(b.Title ?? "", StringComparison.OrdinalIgnoreCase))
-                { connCount[a]++; connCount[b]++; }
+        foreach (var link in links)
+        {
+            connCount[link.A]++;
+            connCount[link.B]++;
+        }
 
         // Initial circle positions with jitter
         var rng = new Random(42);
@@ -913,16 +1145,18 @@ public partial class MainWindow : Window
                     forces[notes[i]] = (forces[notes[i]].fx + dx/dist*f, forces[notes[i]].fy + dy/dist*f);
                     forces[notes[j]] = (forces[notes[j]].fx - dx/dist*f, forces[notes[j]].fy - dy/dist*f);
                 }
-            foreach (var a in notes)
-                foreach (var b in notes)
-                    if (a != b && (a.Body ?? "").Contains(b.Title ?? "", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var (x1,y1) = _nodePositions[a]; var (x2,y2) = _nodePositions[b];
-                        double dx = x2-x1, dy = y2-y1;
-                        double dist = Math.Max(Math.Sqrt(dx*dx+dy*dy), 1);
-                        double f = dist / 220.0;
-                        forces[a] = (forces[a].fx + dx/dist*f, forces[a].fy + dy/dist*f);
-                    }
+            foreach (var link in links)
+            {
+                var a = link.A;
+                var b = link.B;
+                var (x1,y1) = _nodePositions[a]; var (x2,y2) = _nodePositions[b];
+                double dx = x2-x1, dy = y2-y1;
+                double dist = Math.Max(Math.Sqrt(dx*dx+dy*dy), 1);
+                double target = Math.Max(110, 280 - link.Score * 130);
+                double f = (dist - target) / target * (0.12 + link.Score * 0.28);
+                forces[a] = (forces[a].fx + dx/dist*f, forces[a].fy + dy/dist*f);
+                forces[b] = (forces[b].fx - dx/dist*f, forces[b].fy - dy/dist*f);
+            }
             double damp = Math.Max(0.04, 0.92 - iter * 0.006);
             foreach (var n in notes)
             {
@@ -935,7 +1169,7 @@ public partial class MainWindow : Window
         // Draw lines FIRST so they sit behind nodes
         // Draw ALL notes with at least a faint background line to every neighbour (Obsidian style)
         // plus brighter lines for actual references
-        DrawAllLines(notes, connCount);
+        DrawGraphLines(notes, links);
 
         // Draw nodes
         foreach (var note in notes)
@@ -950,52 +1184,229 @@ public partial class MainWindow : Window
         CompositionTarget.Rendering += GraphRenderFrame;
     }
 
-    private void DrawAllLines(List<SecureNote> notes, Dictionary<SecureNote, int> connCount)
+    private List<GraphLink> BuildGraphLinks(List<SecureNote> notes)
     {
-        var referenced = new HashSet<(SecureNote, SecureNote)>();
+        var profiles = notes.ToDictionary(n => n, BuildGraphProfile);
+        var candidates = new List<GraphLink>();
 
-        // Draw reference lines (bright)
-        foreach (var a in notes)
-            foreach (var b in notes)
+        for (var i = 0; i < notes.Count; i++)
+        {
+            for (var j = i + 1; j < notes.Count; j++)
             {
-                if (a == b) continue;
-                var key = a.GetHashCode() < b.GetHashCode() ? (a, b) : (b, a);
-                if (referenced.Contains(key)) continue;
-                bool linked = (a.Body ?? "").Contains(b.Title ?? "", StringComparison.OrdinalIgnoreCase)
-                           || (b.Body ?? "").Contains(a.Title ?? "", StringComparison.OrdinalIgnoreCase);
-                if (!linked) continue;
-                referenced.Add(key);
-                if (!_nodePositions.ContainsKey(a) || !_nodePositions.ContainsKey(b)) continue;
-                var (x1,y1) = _nodePositions[a]; var (x2,y2) = _nodePositions[b];
-                var line = new Line { X1=x1,Y1=y1,X2=x2,Y2=y2, Stroke=new SolidColorBrush(GraphLineColor), StrokeThickness=1.4, Opacity=0.9 };
-                Panel.SetZIndex(line, -1);
-                GraphInnerCanvas.Children.Add(line);
+                var a = notes[i];
+                var b = notes[j];
+                var score = ScoreNoteRelevance(a, b, profiles[a], profiles[b], out var isExplicit);
+                if (score >= 0.12 || isExplicit)
+                    candidates.Add(new GraphLink(a, b, score, isExplicit));
             }
+        }
 
-        // Always draw a faint proximity web so graph is never empty
-        // Connect each node to its 2 nearest neighbours with a dim line
+        var topKeys = new HashSet<string>();
+        foreach (var note in notes)
+        {
+            foreach (var link in candidates
+                         .Where(l => ReferenceEquals(l.A, note) || ReferenceEquals(l.B, note))
+                         .OrderByDescending(l => l.Score)
+                         .Take(4))
+            {
+                topKeys.Add(GraphPairKey(link.A, link.B));
+            }
+        }
+
+        return candidates
+            .Where(l => l.Explicit || l.Score >= 0.34 || (l.Score >= 0.16 && topKeys.Contains(GraphPairKey(l.A, l.B))))
+            .OrderByDescending(l => l.Score)
+            .Take(Math.Max(12, notes.Count * 5))
+            .ToList();
+    }
+
+    private sealed record GraphProfile(
+        Dictionary<string, double> Terms,
+        HashSet<string> TitleTerms,
+        HashSet<string> Tags,
+        HashSet<string> Domains,
+        string SearchText);
+
+    private static GraphProfile BuildGraphProfile(SecureNote note)
+    {
+        var terms = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var titleTerms = TokenizeGraphText(note.Title).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var term in titleTerms) AddGraphTerm(terms, term, 2.7);
+
+        foreach (var term in TokenizeGraphText(note.Body))
+            AddGraphTerm(terms, term, 1.0);
+
+        foreach (var term in TokenizeGraphText(note.Folder))
+            AddGraphTerm(terms, term, 1.5);
+
+        var tags = (note.Tags ?? new List<string>())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim().ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var tag in tags)
+            foreach (var term in TokenizeGraphText(tag))
+                AddGraphTerm(terms, term, 3.0);
+
+        var searchText = $"{note.Title} {note.Folder} {string.Join(" ", note.Tags ?? new List<string>())} {note.Body}".ToLowerInvariant();
+        return new GraphProfile(terms, titleTerms, tags, DetectGraphDomains(terms.Keys, searchText), searchText);
+    }
+
+    private static double ScoreNoteRelevance(
+        SecureNote a,
+        SecureNote b,
+        GraphProfile pa,
+        GraphProfile pb,
+        out bool explicitLink)
+    {
+        explicitLink = ContainsGraphPhrase(pa.SearchText, b.Title) || ContainsGraphPhrase(pb.SearchText, a.Title);
+        var score = explicitLink ? 0.52 : 0.0;
+
+        var sharedTags = pa.Tags.Intersect(pb.Tags, StringComparer.OrdinalIgnoreCase).Count();
+        if (sharedTags > 0)
+            score += 0.22 + Math.Min(0.16, (sharedTags - 1) * 0.06);
+
+        if (!string.IsNullOrWhiteSpace(a.Folder) &&
+            string.Equals(a.Folder, b.Folder, StringComparison.OrdinalIgnoreCase))
+            score += 0.12;
+
+        var termSimilarity = WeightedGraphSimilarity(pa.Terms, pb.Terms);
+        score += Math.Min(0.42, termSimilarity * 0.78);
+
+        var titleOverlap = pa.TitleTerms.Intersect(pb.Terms.Keys, StringComparer.OrdinalIgnoreCase).Count()
+                         + pb.TitleTerms.Intersect(pa.Terms.Keys, StringComparer.OrdinalIgnoreCase).Count();
+        score += Math.Min(0.18, titleOverlap * 0.045);
+
+        var sharedDomains = pa.Domains.Intersect(pb.Domains, StringComparer.OrdinalIgnoreCase).Count();
+        score += Math.Min(0.24, sharedDomains * 0.14);
+
+        return Math.Clamp(score, 0, 1);
+    }
+
+    private static double WeightedGraphSimilarity(Dictionary<string, double> a, Dictionary<string, double> b)
+    {
+        if (a.Count == 0 || b.Count == 0) return 0;
+        var dot = 0.0;
+        foreach (var (term, weight) in a)
+            if (b.TryGetValue(term, out var other))
+                dot += weight * other;
+
+        var normA = Math.Sqrt(a.Values.Sum(v => v * v));
+        var normB = Math.Sqrt(b.Values.Sum(v => v * v));
+        return normA <= 0 || normB <= 0 ? 0 : dot / (normA * normB);
+    }
+
+    private static IEnumerable<string> TokenizeGraphText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) yield break;
+        foreach (Match match in Regex.Matches(text.ToLowerInvariant(), "[a-z0-9][a-z0-9+#.-]{1,}"))
+        {
+            var term = match.Value.Trim('.', '-', '_');
+            if (term.Length < 2 || GraphStopWords.Contains(term)) continue;
+            yield return term;
+        }
+    }
+
+    private static void AddGraphTerm(Dictionary<string, double> terms, string term, double weight)
+    {
+        if (GraphStopWords.Contains(term)) return;
+        terms[term] = terms.TryGetValue(term, out var existing) ? existing + weight : weight;
+    }
+
+    private static HashSet<string> DetectGraphDomains(IEnumerable<string> terms, string searchText)
+    {
+        var termSet = terms.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (domain, keywords) in GraphDomainKeywords)
+        {
+            if (keywords.Any(k => termSet.Contains(k) || (k.Length > 3 && searchText.Contains(k, StringComparison.OrdinalIgnoreCase))))
+                domains.Add(domain);
+        }
+        return domains;
+    }
+
+    private static bool ContainsGraphPhrase(string haystack, string? phrase)
+    {
+        if (string.IsNullOrWhiteSpace(phrase)) return false;
+        phrase = phrase.Trim().ToLowerInvariant();
+        return phrase.Length >= 3 && haystack.Contains(phrase, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GraphPairKey(SecureNote a, SecureNote b)
+        => string.CompareOrdinal(a.Id, b.Id) <= 0 ? $"{a.Id}|{b.Id}" : $"{b.Id}|{a.Id}";
+
+    private static readonly HashSet<string> GraphStopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the", "and", "for", "with", "from", "that", "this", "into", "onto", "your", "you", "are", "was",
+        "were", "has", "have", "had", "not", "but", "all", "any", "can", "will", "just", "about", "what",
+        "when", "where", "why", "how", "note", "notes", "key", "keys", "code", "text", "todo", "list"
+    };
+
+    private static readonly Dictionary<string, string[]> GraphDomainKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ai"] = new[] { "ai", "artificial", "intelligence", "llm", "gpt", "openai", "claude", "anthropic", "codex", "model", "prompt", "api", "agent" },
+        ["github"] = new[] { "github", "git", "repo", "repository", "branch", "commit", "pull", "request", "pr", "issue", "actions", "workflow" },
+        ["security"] = new[] { "security", "cyber", "password", "vault", "secret", "token", "malware", "threat", "vulnerability", "recovery", "encrypt", "encrypted" },
+        ["crypto"] = new[] { "crypto", "wallet", "seed", "blockchain", "coin", "bitcoin", "ethereum", "recovery", "phrase" },
+        ["cloud"] = new[] { "cloud", "azure", "aws", "server", "service", "deployment", "hosting", "api" }
+    };
+
+    private void DrawGraphLines(List<SecureNote> notes, List<GraphLink> links)
+    {
+        var strongKeys = links.Select(l => GraphPairKey(l.A, l.B)).ToHashSet(StringComparer.Ordinal);
+        var faintKeys = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var a in notes)
         {
             if (!_nodePositions.ContainsKey(a)) continue;
             var (ax, ay) = _nodePositions[a];
             var nearest = notes
                 .Where(b => b != a && _nodePositions.ContainsKey(b))
-                .OrderBy(b => { var (bx,by) = _nodePositions[b]; return (bx-ax)*(bx-ax)+(by-ay)*(by-ay); })
+                .OrderBy(b =>
+                {
+                    var (bx, by) = _nodePositions[b];
+                    return (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+                })
                 .Take(2);
+
             foreach (var b in nearest)
             {
-                var key = a.GetHashCode() < b.GetHashCode() ? (a,b) : (b,a);
-                if (referenced.Contains(key)) continue; // don't overdraw reference lines
-                var (bx,by) = _nodePositions[b];
+                var key = GraphPairKey(a, b);
+                if (strongKeys.Contains(key) || !faintKeys.Add(key)) continue;
+                var (bx, by) = _nodePositions[b];
                 var faint = new Line
                 {
-                    X1=ax,Y1=ay,X2=bx,Y2=by,
-                    Stroke = new SolidColorBrush(Color.FromArgb(45, GraphLineColor.R, GraphLineColor.G, GraphLineColor.B)),
-                    StrokeThickness = 0.8
+                    X1 = ax,
+                    Y1 = ay,
+                    X2 = bx,
+                    Y2 = by,
+                    Stroke = new SolidColorBrush(Color.FromArgb(38, GraphLineColor.R, GraphLineColor.G, GraphLineColor.B)),
+                    StrokeThickness = 0.75,
+                    Opacity = 0.72
                 };
                 Panel.SetZIndex(faint, -2);
                 GraphInnerCanvas.Children.Add(faint);
             }
+        }
+
+        foreach (var link in links.OrderBy(l => l.Score))
+        {
+            if (!_nodePositions.ContainsKey(link.A) || !_nodePositions.ContainsKey(link.B)) continue;
+            var (x1,y1) = _nodePositions[link.A]; var (x2,y2) = _nodePositions[link.B];
+            var alpha = (byte)Math.Clamp(60 + link.Score * 170, 55, 220);
+            var stroke = Color.FromArgb(alpha, GraphLineColor.R, GraphLineColor.G, GraphLineColor.B);
+            var line = new Line
+            {
+                X1 = x1,
+                Y1 = y1,
+                X2 = x2,
+                Y2 = y2,
+                Stroke = new SolidColorBrush(stroke),
+                StrokeThickness = Math.Clamp(0.75 + link.Score * 2.7, 0.8, 3.2),
+                Opacity = link.Explicit ? 0.95 : 0.82,
+                ToolTip = $"Relevance {link.Score:P0}"
+            };
+            Panel.SetZIndex(line, -1);
+            GraphInnerCanvas.Children.Add(line);
         }
     }
 
@@ -1153,8 +1564,7 @@ public partial class MainWindow : Window
         foreach (var l in GraphInnerCanvas.Children.OfType<Line>().ToList())
             GraphInnerCanvas.Children.Remove(l);
         var notes = _vault.Notes.ToList();
-        var connCount = notes.ToDictionary(n => n, _ => 0);
-        DrawAllLines(notes, connCount);
+        DrawGraphLines(notes, BuildGraphLinks(notes));
     }
 
     private void GraphCanvas_MouseDown(object sender, MouseButtonEventArgs e)
@@ -1355,19 +1765,19 @@ public partial class MainWindow : Window
     private async void RunBreachCheck_Click(object sender, RoutedEventArgs e)
     {
         SecurityTitle.Text = "BREACH CHECK";
-        SecurityList.ItemsSource = new[] { new { Title = "Checking...", Username = "", StrengthLabel = "Using k-anonymity SHA-1 prefix lookup" } };
+        SecurityList.ItemsSource = new[] { new { Title = "Checking...", Username = "", StrengthLabel = "SHA-1 prefix lookup", Details = "Using k-anonymity; only the first 5 SHA-1 characters are sent" } };
         var results = new List<object>();
         foreach (var entry in _vault.Entries.Where(e => !string.IsNullOrEmpty(e.Password)))
         {
             var count = await SecurityInsights.CheckBreachAsync(entry.Password);
             if (count > 0)
-                results.Add(new { entry.Title, entry.Username, StrengthLabel = $"Seen {count:N0} times" });
+                results.Add(new { entry.Title, entry.Username, StrengthLabel = $"Seen {count:N0} times", Details = "Change this password anywhere it is used" });
             else if (count == -1)
-                results.Add(new { entry.Title, entry.Username, StrengthLabel = "Check failed" });
+                results.Add(new { entry.Title, entry.Username, StrengthLabel = "Check failed", Details = "Network or service error" });
         }
         SecurityList.ItemsSource = results.Count > 0
             ? results
-            : new[] { new { Title = "No breached passwords found", Username = "", StrengthLabel = "" } };
+            : new[] { new { Title = "No breached passwords found", Username = "", StrengthLabel = "", Details = "" } };
     }
 
     private void ShowWeakList(System.Collections.Generic.List<VaultEntry> entries)
@@ -1375,7 +1785,8 @@ public partial class MainWindow : Window
         SecurityList.ItemsSource = entries.Select(e2 => new
         {
             e2.Title, e2.Username,
-            StrengthLabel = $"{SecurityInsights.StrengthLabel(SecurityInsights.PasswordStrength(e2.Password))} ({SecurityInsights.PasswordStrength(e2.Password)}%)"
+            StrengthLabel = SecurityInsights.AnalyzePassword(e2.Password).Display,
+            Details = SecurityInsights.AnalyzePassword(e2.Password).Summary
         }).ToList();
     }
 
@@ -1470,7 +1881,7 @@ public partial class MainWindow : Window
         catch { }
     }
 
-    private static string ColorToHex(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+    private static string ColorToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     private static Color HexToColor(string hex)
     {
         try { return (Color)ColorConverter.ConvertFromString(hex); }
@@ -1487,8 +1898,79 @@ public partial class MainWindow : Window
     private void ShowEncryptedShareInfo_Click(object sender, RoutedEventArgs e)
     {
         new BastionDialog("Encrypted shares",
-            "Export encrypted share creates a .bastion-share file containing a copy of the current passwords and notes.\n\nTo import one, click Import encrypted share, choose the .bastion-share file, then enter the password that was used when the file was exported. Bastion decrypts the file and merges non-duplicate passwords and notes into the open vault.\n\nThe expiry date is stored inside the file as metadata. Expired shares show a warning before import.",
+            "Export encrypted share creates a .bastion-share file containing a password-protected copy of passwords, secure notes, tags, and note attachments.\n\nHow to export:\n1. Click Export encrypted share.\n2. Choose where to save the .bastion-share file.\n3. Send the file only through a channel you trust.\n\nHow to import:\n1. Click Import encrypted share.\n2. Choose the .bastion-share file.\n3. Enter the password that was used when it was exported.\n4. Bastion decrypts it and merges non-duplicate passwords and notes into this vault.\n\nExpired shares show a warning before import. Shares are for moving or sharing selected vault data; encrypted backups are better for full vault recovery.",
             false).ShowDialog();
+    }
+
+    private void CreateVaultBackup_Click(object sender, RoutedEventArgs e)
+    {
+        SaveCurrentNote();
+        VaultStore.Save(_vault, _password);
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Bastion Backup (*.bastion-backup)|*.bastion-backup|Vault Data (*.dat)|*.dat",
+            FileName = $"bastion-backup-{DateTime.Now:yyyyMMdd-HHmm}.bastion-backup"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            File.Copy(VaultStore.VaultPath, dlg.FileName, overwrite: true);
+            new BastionDialog("Backup created",
+                $"Encrypted backup saved to:\n{dlg.FileName}\n\nThis backup still requires your current master password.",
+                false) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            new BastionDialog("Backup failed", ex.Message, false) { Owner = this }.ShowDialog();
+        }
+    }
+
+    private void RestoreVaultBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var openDlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Bastion Backup (*.bastion-backup)|*.bastion-backup|Vault Data (*.dat)|*.dat"
+        };
+        if (openDlg.ShowDialog() != true) return;
+
+        var confirm = new BastionDialog("Restore backup?",
+            "This will replace the currently open vault with the selected encrypted backup. Make sure you know the master password used for that backup.",
+            true) { Owner = this };
+        if (confirm.ShowDialog() != true) return;
+
+        try
+        {
+            var restored = VaultStore.LoadFromFile(openDlg.FileName, _password);
+            File.Copy(openDlg.FileName, VaultStore.VaultPath, overwrite: true);
+            _vault = restored;
+            NormalizeVault();
+            StartLocalApi();
+            VaultList.ItemsSource = _vault.Entries;
+            RefreshPasswordList();
+            RefreshNotesTree();
+            RefreshTagPanel();
+            RefreshTrash();
+            UpdateHomeStats();
+            UpdateSettingsControls();
+            if (_vault.Notes.Count > 0) OpenNote(_vault.Notes.OrderByDescending(n => n.UpdatedAt).First());
+            else ClearCurrentNoteUi();
+
+            new BastionDialog("Backup restored",
+                "The encrypted backup was restored and the vault was reloaded.",
+                false) { Owner = this }.ShowDialog();
+        }
+        catch (CryptographicException)
+        {
+            new BastionDialog("Restore failed",
+                "The backup could not be decrypted with the current master password.",
+                false) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            new BastionDialog("Restore failed", ex.Message, false) { Owner = this }.ShowDialog();
+        }
     }
 
     private void UpdateSettingsControls()
@@ -1497,10 +1979,24 @@ public partial class MainWindow : Window
         try
         {
             if (AutofillEnabledCheck != null) AutofillEnabledCheck.IsChecked = _vault.Settings.AutofillEnabled;
+            if (RunInTrayCheck != null) RunInTrayCheck.IsChecked = _vault.Settings.RunInTray;
+            if (StartOnBootCheck != null) StartOnBootCheck.IsChecked = _vault.Settings.StartOnBoot;
+            if (StartHiddenToTrayCheck != null)
+            {
+                StartHiddenToTrayCheck.IsChecked = _vault.Settings.StartHiddenToTray;
+                StartHiddenToTrayCheck.IsEnabled = _vault.Settings.StartOnBoot;
+            }
             if (DarkThemeCheck != null) DarkThemeCheck.IsChecked = _vault.Settings.DarkTheme;
             if (AccentColorBox != null) AccentColorBox.Text = _vault.Settings.AccentColor;
+            if (GraphNodeColorBox != null) GraphNodeColorBox.Text = ColorToHex(GraphNodeColor);
+            if (GraphHubColorBox != null) GraphHubColorBox.Text = ColorToHex(GraphHubColor);
+            if (GraphLineColorBox != null) GraphLineColorBox.Text = ColorToHex(GraphLineColor);
+            EnsureSettingsColorMaps();
+            UpdateColorPreviews();
             if (LockTimeoutCombo != null)
                 SelectLockTimeoutItem(_vault.Settings.LockMinutes);
+            if (ClipboardTimeoutCombo != null)
+                SelectClipboardTimeoutItem(_vault.Settings.ClipboardTimeoutSeconds);
         }
         finally
         {
@@ -1522,11 +2018,91 @@ public partial class MainWindow : Window
         LockTimeoutCombo.SelectedIndex = 2;
     }
 
+    private void SelectClipboardTimeoutItem(int seconds)
+    {
+        foreach (var item in ClipboardTimeoutCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (int.TryParse(item.Tag?.ToString(), out var tagSeconds) && tagSeconds == seconds)
+            {
+                ClipboardTimeoutCombo.SelectedItem = item;
+                return;
+            }
+        }
+
+        ClipboardTimeoutCombo.SelectedIndex = 2;
+    }
+
+    private void ClipboardTimeout_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_vault?.Settings == null || ClipboardTimeoutCombo == null || _isUpdatingSettingsControls) return;
+        if (ClipboardTimeoutCombo.SelectedItem is ComboBoxItem item &&
+            int.TryParse(item.Tag?.ToString(), out var seconds))
+        {
+            _vault.Settings.ClipboardTimeoutSeconds = Math.Clamp(seconds, 0, 300);
+            VaultStore.Save(_vault, _password);
+        }
+    }
+
     private void AutofillEnabled_Changed(object sender, RoutedEventArgs e)
     {
         if (_vault?.Settings == null || AutofillEnabledCheck == null || _isUpdatingSettingsControls) return;
         _vault.Settings.AutofillEnabled = AutofillEnabledCheck.IsChecked == true;
         VaultStore.Save(_vault, _password);
+    }
+
+    private void TrayStartup_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_vault?.Settings == null || _isUpdatingSettingsControls) return;
+
+        _vault.Settings.RunInTray = RunInTrayCheck?.IsChecked == true;
+        _vault.Settings.StartOnBoot = StartOnBootCheck?.IsChecked == true;
+        _vault.Settings.StartHiddenToTray = _vault.Settings.StartOnBoot && StartHiddenToTrayCheck?.IsChecked == true;
+
+        if (_vault.Settings.StartHiddenToTray)
+            _vault.Settings.RunInTray = true;
+        if (!_vault.Settings.StartOnBoot)
+            _vault.Settings.StartHiddenToTray = false;
+
+        ApplyStartupRegistration();
+        VaultStore.Save(_vault, _password);
+        UpdateSettingsControls();
+
+        if (_vault.Settings.RunInTray)
+            EnsureTrayIcon();
+        else if (IsVisible)
+        {
+            _trayIcon?.Dispose();
+            _trayIcon = null;
+        }
+    }
+
+    private void ApplyStartupRegistration()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
+            if (key == null) return;
+
+            const string valueName = "Bastion";
+            if (_vault.Settings.StartOnBoot)
+            {
+                var exePath = Process.GetCurrentProcess().MainModule?.FileName
+                              ?? System.Windows.Forms.Application.ExecutablePath;
+                var args = _vault.Settings.StartHiddenToTray ? " --start-hidden" : "";
+                key.SetValue(valueName, $"\"{exePath}\"{args}");
+            }
+            else
+            {
+                key.DeleteValue(valueName, throwOnMissingValue: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            new BastionDialog("Startup setting failed",
+                $"Bastion could not update the Windows startup setting:\n{ex.Message}",
+                false) { Owner = this }.ShowDialog();
+        }
     }
 
     private void Theme_Changed(object sender, RoutedEventArgs e)
@@ -1539,9 +2115,216 @@ public partial class MainWindow : Window
 
     private void AccentColor_Changed(object sender, TextChangedEventArgs e)
     {
-        if (_vault?.Settings == null || AccentColorBox == null || _isUpdatingSettingsControls || string.IsNullOrWhiteSpace(AccentColorBox.Text)) return;
-        _vault.Settings.AccentColor = AccentColorBox.Text.Trim();
+        if (_vault?.Settings == null || AccentColorBox == null || _isUpdatingSettingsControls || _isUpdatingColorText || string.IsNullOrWhiteSpace(AccentColorBox.Text)) return;
+        if (!TryParseHexColor(AccentColorBox.Text.Trim(), out var color)) return;
+        _vault.Settings.AccentColor = ColorToHex(color);
+        UpdateColorPreviews();
         ApplyTheme();
+        VaultStore.Save(_vault, _password);
+    }
+
+    private void GraphColorText_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_vault?.Settings == null || _isUpdatingSettingsControls || _isUpdatingColorText) return;
+        if (sender == GraphNodeColorBox && TryParseHexColor(GraphNodeColorBox.Text, out var node))
+            GraphNodeColor = node;
+        else if (sender == GraphHubColorBox && TryParseHexColor(GraphHubColorBox.Text, out var hub))
+            GraphHubColor = hub;
+        else if (sender == GraphLineColorBox && TryParseHexColor(GraphLineColorBox.Text, out var line))
+            GraphLineColor = line;
+        else
+            return;
+
+        SaveGraphColors();
+        UpdateColorPreviews();
+        RefreshGraphColors();
+    }
+
+    private void EnsureSettingsColorMaps()
+    {
+        _colorMapSource ??= CreateColorMapBitmap(360, 120);
+        if (AccentColorMap != null) AccentColorMap.Source = _colorMapSource;
+        if (GraphNodeColorMap != null) GraphNodeColorMap.Source = _colorMapSource;
+        if (GraphHubColorMap != null) GraphHubColorMap.Source = _colorMapSource;
+        if (GraphLineColorMap != null) GraphLineColorMap.Source = _colorMapSource;
+    }
+
+    private void ColorMap_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Image image) return;
+        image.CaptureMouse();
+        ApplyColorFromMap(image, e.GetPosition(image));
+        e.Handled = true;
+    }
+
+    private void ColorMap_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (sender is not Image image || e.LeftButton != MouseButtonState.Pressed) return;
+        ApplyColorFromMap(image, e.GetPosition(image));
+        e.Handled = true;
+    }
+
+    private void ColorMap_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Image image)
+            image.ReleaseMouseCapture();
+    }
+
+    private void ApplyColorFromMap(Image image, Point point)
+    {
+        var color = ColorFromMapPoint(point, image.ActualWidth, image.ActualHeight);
+        switch (image.Tag?.ToString())
+        {
+            case "Accent":
+                SetAccentColor(color);
+                break;
+            case "GraphNode":
+                GraphNodeColor = color;
+                SetColorBox(GraphNodeColorBox, color);
+                SaveGraphColors();
+                RefreshGraphColors();
+                break;
+            case "GraphHub":
+                GraphHubColor = color;
+                SetColorBox(GraphHubColorBox, color);
+                SaveGraphColors();
+                RefreshGraphColors();
+                break;
+            case "GraphLine":
+                GraphLineColor = color;
+                SetColorBox(GraphLineColorBox, color);
+                SaveGraphColors();
+                RefreshGraphColors();
+                break;
+        }
+
+        UpdateColorPreviews();
+    }
+
+    private void SetAccentColor(Color color)
+    {
+        if (_vault?.Settings == null) return;
+        _vault.Settings.AccentColor = ColorToHex(color);
+        SetColorBox(AccentColorBox, color);
+        ApplyTheme();
+        VaultStore.Save(_vault, _password);
+    }
+
+    private void SetColorBox(TextBox? textBox, Color color)
+    {
+        if (textBox == null) return;
+        _isUpdatingColorText = true;
+        textBox.Text = ColorToHex(color);
+        _isUpdatingColorText = false;
+    }
+
+    private void UpdateColorPreviews()
+    {
+        SetColorPreview(AccentColorPreview, GetAccentColor());
+        SetColorPreview(GraphNodeColorPreview, GraphNodeColor);
+        SetColorPreview(GraphHubColorPreview, GraphHubColor);
+        SetColorPreview(GraphLineColorPreview, GraphLineColor);
+    }
+
+    private static void SetColorPreview(Border? preview, Color color)
+    {
+        if (preview == null) return;
+        preview.Background = new SolidColorBrush(color);
+    }
+
+    private static BitmapSource CreateColorMapBitmap(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+        {
+            var yMix = height <= 1 ? 0.5 : y / (double)(height - 1);
+            for (var x = 0; x < width; x++)
+            {
+                var hue = width <= 1 ? 0 : x * 360.0 / (width - 1);
+                var color = ColorFromHueMap(hue, yMix);
+                var index = (y * width + x) * 4;
+                pixels[index] = color.B;
+                pixels[index + 1] = color.G;
+                pixels[index + 2] = color.R;
+                pixels[index + 3] = 255;
+            }
+        }
+
+        var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+        source.Freeze();
+        return source;
+    }
+
+    private static Color ColorFromMapPoint(Point point, double width, double height)
+    {
+        var safeWidth = Math.Max(width, 1);
+        var safeHeight = Math.Max(height, 1);
+        var x = Math.Clamp(point.X, 0, safeWidth - 1);
+        var y = Math.Clamp(point.Y, 0, safeHeight - 1);
+        var hue = x * 360.0 / Math.Max(safeWidth - 1, 1);
+        var yMix = y / Math.Max(safeHeight - 1, 1);
+        return ColorFromHueMap(hue, yMix);
+    }
+
+    private static Color ColorFromHueMap(double hue, double yMix)
+    {
+        var saturated = ColorFromHsv(hue, 1.0, 1.0);
+        return yMix < 0.5
+            ? BlendColor(Colors.White, saturated, yMix * 2.0)
+            : BlendColor(saturated, Colors.Black, (yMix - 0.5) * 2.0);
+    }
+
+    private static Color ColorFromHsv(double hue, double saturation, double value)
+    {
+        hue = ((hue % 360) + 360) % 360;
+        var chroma = value * saturation;
+        var x = chroma * (1 - Math.Abs((hue / 60.0) % 2 - 1));
+        var m = value - chroma;
+        (double r, double g, double b) = hue switch
+        {
+            < 60 => (chroma, x, 0.0),
+            < 120 => (x, chroma, 0.0),
+            < 180 => (0.0, chroma, x),
+            < 240 => (0.0, x, chroma),
+            < 300 => (x, 0.0, chroma),
+            _ => (chroma, 0.0, x)
+        };
+        return Color.FromRgb(
+            (byte)Math.Round((r + m) * 255),
+            (byte)Math.Round((g + m) * 255),
+            (byte)Math.Round((b + m) * 255));
+    }
+
+    private static Color BlendColor(Color from, Color to, double amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(from.R + (to.R - from.R) * amount),
+            (byte)Math.Round(from.G + (to.G - from.G) * amount),
+            (byte)Math.Round(from.B + (to.B - from.B) * amount));
+    }
+
+    private Color GetAccentColor()
+        => TryParseHexColor(_vault?.Settings?.AccentColor ?? "", out var color) ? color : Color.FromRgb(0x7C, 0x3A, 0xED);
+
+    private static bool TryParseHexColor(string? hex, out Color color)
+    {
+        color = Colors.Transparent;
+        if (string.IsNullOrWhiteSpace(hex)) return false;
+        hex = hex.Trim();
+        if (!hex.StartsWith("#", StringComparison.Ordinal)) hex = "#" + hex;
+        if (hex.Length != 7 && hex.Length != 9) return false;
+
+        try
+        {
+            color = (Color)ColorConverter.ConvertFromString(hex);
+            color.A = 255;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void ApplyTheme()
@@ -1582,8 +2365,13 @@ public partial class MainWindow : Window
 
     private void ApplyExplicitThemeControls()
     {
+        EnsureSettingsColorMaps();
+        UpdateColorPreviews();
         ApplyNavigationTheme();
         ApplyCheckboxTheme(AutofillEnabledCheck);
+        ApplyCheckboxTheme(RunInTrayCheck);
+        ApplyCheckboxTheme(StartOnBootCheck);
+        ApplyCheckboxTheme(StartHiddenToTrayCheck);
         ApplyCheckboxTheme(DarkThemeCheck);
         ApplyPasswordManagerTheme();
     }
@@ -1594,9 +2382,13 @@ public partial class MainWindow : Window
 
         _activeNavButton = GetNavButtonForCurrentView() ?? _activeNavButton ?? BtnHome;
         var isDark = _vault.Settings.DarkTheme;
+        var accent = GetAccentColor();
         var inactiveForeground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#777777" : "#4B5563"));
         var activeForeground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#E8E8E8" : "#111827"));
-        var activeBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#2D2D2D" : "#E5E7EB"));
+        var activeBackgroundColor = isDark
+            ? BlendColor(Color.FromRgb(0x16, 0x16, 0x16), accent, 0.36)
+            : BlendColor(Colors.White, accent, 0.18);
+        var activeBackground = new SolidColorBrush(activeBackgroundColor);
 
         foreach (var (button, border) in new[]
         {
@@ -1628,32 +2420,33 @@ public partial class MainWindow : Window
         if (SearchBox == null || _vault?.Settings == null) return;
 
         var isDark = _vault.Settings.DarkTheme;
-        ApplyTextBoxTheme(SearchBox, isDark);
-        ApplyPasswordActionButtonTheme(PasswordAddButton, "primary", isDark);
-        ApplyPasswordActionButtonTheme(PasswordEditButton, "ghost", isDark);
-        ApplyPasswordActionButtonTheme(PasswordCopyButton, "ghost", isDark);
-        ApplyPasswordActionButtonTheme(PasswordCopyTotpButton, "ghost", isDark);
-        ApplyPasswordActionButtonTheme(PasswordImportCsvButton, "ghost", isDark);
-        ApplyPasswordActionButtonTheme(PasswordDeleteButton, "danger", isDark);
+        var accent = GetAccentColor();
+        ApplyTextBoxTheme(SearchBox, isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordAddButton, "primary", isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordEditButton, "ghost", isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordCopyButton, "ghost", isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordCopyTotpButton, "ghost", isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordImportCsvButton, "ghost", isDark, accent);
+        ApplyPasswordActionButtonTheme(PasswordDeleteButton, "danger", isDark, accent);
     }
 
-    private static void ApplyTextBoxTheme(TextBox textBox, bool isDark)
+    private static void ApplyTextBoxTheme(TextBox textBox, bool isDark, Color accent)
     {
         textBox.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#252525" : "#FFFFFF"));
         textBox.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#E8E8E8" : "#1F2937"));
         textBox.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#3A3A3A" : "#CBD5E1"));
-        textBox.CaretBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7C3AED"));
-        textBox.SelectionBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7C3AED"));
+        textBox.CaretBrush = new SolidColorBrush(accent);
+        textBox.SelectionBrush = new SolidColorBrush(accent);
     }
 
-    private static void ApplyPasswordActionButtonTheme(Button button, string variant, bool isDark)
+    private static void ApplyPasswordActionButtonTheme(Button button, string variant, bool isDark, Color accent)
     {
         switch (variant)
         {
             case "primary":
-                button.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7C3AED"));
+                button.Background = new SolidColorBrush(accent);
                 button.Foreground = Brushes.White;
-                button.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7C3AED"));
+                button.BorderBrush = new SolidColorBrush(accent);
                 break;
             case "danger":
                 button.Background = Brushes.Transparent;
@@ -1663,7 +2456,9 @@ public partial class MainWindow : Window
             default:
                 button.Background = Brushes.Transparent;
                 button.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#A3A3A3" : "#374151"));
-                button.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDark ? "#4A4A4A" : "#CBD5E1"));
+                button.BorderBrush = new SolidColorBrush(isDark
+                    ? BlendColor(Color.FromRgb(0x4A, 0x4A, 0x4A), accent, 0.18)
+                    : BlendColor(Color.FromRgb(0xCB, 0xD5, 0xE1), accent, 0.24));
                 break;
         }
     }
@@ -2041,6 +2836,7 @@ public partial class MainWindow : Window
             if (!_vault.Tags.Contains(tag)) _vault.Tags.Add(tag);
             VaultStore.Save(_vault, _password);
             RefreshNoteTags();
+            RefreshTagPanel();
         }
     }
 
@@ -2053,8 +2849,10 @@ public partial class MainWindow : Window
             var chip = BuildTagChip(tag, () =>
             {
                 _currentNote.Tags.Remove(tag);
+                SyncVaultTags();
                 VaultStore.Save(_vault, _password);
                 RefreshNoteTags();
+                RefreshTagPanel();
             });
             NoteTagsPanel.Children.Add(chip);
         }
@@ -2072,44 +2870,305 @@ public partial class MainWindow : Window
     {
         if (_currentNote == null) return;
         if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
+        {
             AddAttachments(files);
+            e.Handled = true;
+        }
+    }
+
+    private void NoteBodyEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_currentNote == null) return;
+        if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
+            TryPasteAttachmentFromClipboard())
+        {
+            e.Handled = true;
+        }
+    }
+
+    private bool TryPasteAttachmentFromClipboard()
+    {
+        try
+        {
+            if (Clipboard.ContainsFileDropList())
+            {
+                var files = Clipboard.GetFileDropList().Cast<string>().Where(File.Exists).ToList();
+                if (files.Count == 0) return false;
+                AddAttachments(files);
+                return true;
+            }
+
+            if (Clipboard.ContainsImage())
+            {
+                var image = Clipboard.GetImage();
+                if (image == null) return false;
+                var fileName = $"pasted-image-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                AddImageAttachment(image, fileName);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            NoteSaveStatus.Text = $"Paste failed: {ex.Message}";
+        }
+
+        return false;
     }
 
     private void AddAttachments(IEnumerable<string> fileNames)
     {
         if (_currentNote == null) return;
+        var added = false;
         foreach (var fileName in fileNames.Where(File.Exists))
         {
-            var data = File.ReadAllBytes(fileName);
-            var attachment = new NoteAttachment
+            var info = new FileInfo(fileName);
+            if (info.Length > MaxAttachmentBytes)
             {
-                FileName = System.IO.Path.GetFileName(fileName),
-                ContentType = GetContentType(fileName),
-                DataBase64 = Convert.ToBase64String(data)
-            };
-            _currentNote.Attachments.Add(attachment);
-            NoteBodyEditor.AppendText($"\n[attachment:{attachment.FileName}](bastion-attachment://{attachment.Id})\n");
+                new BastionDialog("Attachment too large",
+                    $"{info.Name} is larger than {FormatFileSize(MaxAttachmentBytes)}. Store smaller files in Bastion to keep the vault responsive.",
+                    false) { Owner = this }.ShowDialog();
+                continue;
+            }
+
+            var data = File.ReadAllBytes(fileName);
+            AddAttachmentBytes(info.Name, GetContentType(fileName), data);
+            added = true;
         }
+        if (added)
+        {
+            SaveCurrentNote();
+            RefreshAttachments();
+        }
+    }
+
+    private void AddImageAttachment(BitmapSource source, string fileName)
+    {
+        if (_currentNote == null) return;
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        AddAttachmentBytes(fileName, "image/png", stream.ToArray());
         SaveCurrentNote();
         RefreshAttachments();
+    }
+
+    private void AddAttachmentBytes(string fileName, string contentType, byte[] data)
+    {
+        if (_currentNote == null) return;
+        _currentNote.Attachments.Add(new NoteAttachment
+        {
+            FileName = string.IsNullOrWhiteSpace(fileName) ? "attachment" : fileName,
+            ContentType = contentType,
+            DataBase64 = Convert.ToBase64String(data)
+        });
     }
 
     private void RefreshAttachments()
     {
         if (AttachmentsList == null) return;
         AttachmentsList.ItemsSource = _currentNote?.Attachments
-            .Select(a => $"{a.FileName} ({Math.Round(a.DataBase64.Length * 0.75 / 1024.0, 1)} KB)")
+            .Select(a => new AttachmentView(
+                a.Id,
+                string.IsNullOrWhiteSpace(a.FileName) ? "Attachment" : a.FileName,
+                $"{AttachmentKind(a)} - {FormatFileSize(GetAttachmentSizeBytes(a))}"))
             .ToList();
+        RefreshInlineAttachments();
+    }
+
+    private void RefreshInlineAttachments()
+    {
+        if (InlineAttachmentsPanel == null || InlineAttachmentsHost == null) return;
+
+        InlineAttachmentsPanel.Children.Clear();
+        var attachments = _currentNote?.Attachments ?? new List<NoteAttachment>();
+        InlineAttachmentsHost.Visibility = attachments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var attachment in attachments)
+            InlineAttachmentsPanel.Children.Add(BuildInlineAttachmentCard(attachment));
+    }
+
+    private Border BuildInlineAttachmentCard(NoteAttachment attachment)
+    {
+        var card = new Border
+        {
+            Width = attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? 300 : 240,
+            MinHeight = 92,
+            Margin = new Thickness(0, 0, 12, 12),
+            Padding = new Thickness(10),
+            Background = new SolidColorBrush(BlendColor(Color.FromRgb(0x16, 0x16, 0x16), GetAccentColor(), 0.08)),
+            BorderBrush = new SolidColorBrush(BlendColor(Color.FromRgb(0x2D, 0x2D, 0x2D), GetAccentColor(), 0.18)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8)
+        };
+
+        var stack = new StackPanel();
+        if (attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
+            TryLoadAttachmentImage(attachment, out var imageSource))
+        {
+            stack.Children.Add(new Border
+            {
+                Height = 190,
+                Background = Brushes.Black,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Child = new Image
+                {
+                    Source = imageSource,
+                    Stretch = Stretch.Uniform,
+                    Margin = new Thickness(4)
+                }
+            });
+        }
+        else
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = AttachmentKind(attachment),
+                FontSize = 20,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(GetAccentColor()),
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+        }
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = attachment.FileName,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 2)
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"{AttachmentKind(attachment)} - {FormatFileSize(GetAttachmentSizeBytes(attachment))}",
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        var open = new Button
+        {
+            Content = "Open",
+            Style = (Style)FindResource("GhostBtn"),
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(8, 0, 8, 0),
+            Tag = attachment.Id,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        open.Click += OpenAttachment_Click;
+
+        var remove = new Button
+        {
+            Content = "Remove",
+            Style = (Style)FindResource("DangerBtn"),
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(8, 0, 8, 0),
+            Tag = attachment.Id
+        };
+        remove.Click += RemoveAttachment_Click;
+
+        actions.Children.Add(open);
+        actions.Children.Add(remove);
+        stack.Children.Add(actions);
+        card.Child = stack;
+        return card;
+    }
+
+    private static bool TryLoadAttachmentImage(NoteAttachment attachment, out BitmapImage? image)
+    {
+        image = null;
+        try
+        {
+            var bytes = Convert.FromBase64String(attachment.DataBase64);
+            using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            image = bitmap;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void Attachment_DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (_currentNote == null || AttachmentsList.SelectedIndex < 0) return;
-        var attachment = _currentNote.Attachments[AttachmentsList.SelectedIndex];
-        var tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), attachment.FileName);
+        if (_currentNote == null || AttachmentsList.SelectedItem is not AttachmentView selected) return;
+        OpenAttachment(selected.Id);
+    }
+
+    private void OpenAttachment_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string id)
+            OpenAttachment(id);
+    }
+
+    private void OpenAttachment(string id)
+    {
+        if (_currentNote == null) return;
+        var attachment = _currentNote.Attachments.FirstOrDefault(a => a.Id == id);
+        if (attachment == null) return;
+        var safeName = MakeSafeFileName(attachment.FileName);
+        var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Bastion", "Attachments");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = System.IO.Path.Combine(tempDir, $"{attachment.Id}-{safeName}");
         File.WriteAllBytes(tempPath, Convert.FromBase64String(attachment.DataBase64));
         Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
     }
+
+    private void RemoveAttachment_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentNote == null || ((FrameworkElement)sender).Tag is not string id) return;
+        var attachment = _currentNote.Attachments.FirstOrDefault(a => a.Id == id);
+        if (attachment == null) return;
+
+        var dlg = new BastionDialog($"Remove \"{attachment.FileName}\"?",
+            "This removes the encrypted attachment from the note and deletes its attachment link from the editor.",
+            true) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+
+        _currentNote.Attachments.Remove(attachment);
+        NoteBodyEditor.Text = StripAttachmentLinks(NoteBodyEditor.Text);
+        SaveCurrentNote();
+        RefreshAttachments();
+    }
+
+    private static string AttachmentKind(NoteAttachment attachment)
+        => attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? "Image" : "File";
+
+    private static long GetAttachmentSizeBytes(NoteAttachment attachment)
+    {
+        try { return Convert.FromBase64String(attachment.DataBase64 ?? "").LongLength; }
+        catch { return 0; }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        var kb = bytes / 1024.0;
+        if (kb < 1024) return $"{kb:0.#} KB";
+        return $"{kb / 1024.0:0.#} MB";
+    }
+
+    private static string MakeSafeFileName(string fileName)
+    {
+        var safe = string.Join("_", (fileName ?? "attachment").Split(System.IO.Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(safe) ? "attachment" : safe;
+    }
+
+    private sealed record AttachmentView(string Id, string FileName, string Details);
 
     private static string GetContentType(string fileName)
     {
@@ -2134,26 +3193,211 @@ public partial class MainWindow : Window
         return Convert.ToBase64String(output.ToArray());
     }
 
-    private Border BuildTagChip(string tag, Action? onRemove = null)
+    private Border BuildTagChip(string tag, Action? onRemove = null, Action? onClick = null)
     {
+        var tagColor = GetTagColor(tag);
         var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock { Text = tag, FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xAA, 0xFF)), VerticalAlignment = VerticalAlignment.Center });
+        var swatch = new Border
+        {
+            Width = 10,
+            Height = 10,
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(tagColor),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 6, 0),
+            ToolTip = "Change tag color",
+            Cursor = Cursors.Hand
+        };
+        swatch.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            ChangeTagColor(tag);
+        };
+        sp.Children.Add(swatch);
+        sp.Children.Add(new TextBlock
+        {
+            Text = tag,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(BlendColor(Colors.White, tagColor, 0.28)),
+            VerticalAlignment = VerticalAlignment.Center
+        });
         if (onRemove != null)
         {
-            var x = new TextBlock { Text = " ×", FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)), VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand };
-            x.MouseLeftButtonDown += (_, _) => onRemove();
+            var x = new TextBlock { Text = "  Remove", FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(0xA3, 0xA3, 0xA3)), VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand };
+            x.MouseLeftButtonDown += (_, e) =>
+            {
+                e.Handled = true;
+                onRemove();
+            };
             sp.Children.Add(x);
         }
         var chip = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x1A, 0x3A)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x7C, 0x3A, 0xED)),
+            Background = new SolidColorBrush(BlendColor(Color.FromRgb(0x1A, 0x1A, 0x1A), tagColor, 0.24)),
+            BorderBrush = new SolidColorBrush(BlendColor(Color.FromRgb(0x33, 0x33, 0x33), tagColor, 0.7)),
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
             Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 4, 4),
             Child = sp, Cursor = Cursors.Hand
         };
-        chip.MouseLeftButtonDown += (_, _) => { _activeTagFilter = tag; RefreshNotesTree(); };
+        chip.MouseLeftButtonDown += (_, _) =>
+        {
+            if (onClick != null) onClick();
+            else
+            {
+                _activeTagFilter = tag;
+                RefreshNotesTree();
+            }
+        };
         return chip;
+    }
+
+    private Color GetTagColor(string tag)
+    {
+        if (_vault?.Settings?.TagColors != null &&
+            _vault.Settings.TagColors.TryGetValue(tag, out var hex) &&
+            TryParseHexColor(hex, out var stored))
+            return stored;
+
+        var hash = unchecked((uint)StringComparer.OrdinalIgnoreCase.GetHashCode(tag));
+        var hue = hash % 360;
+        return ColorFromHsv(hue, 0.72, 0.92);
+    }
+
+    private void ChangeTagColor(string tag)
+    {
+        if (_vault?.Settings == null) return;
+        var selected = ShowColorMapDialog($"Tag color: {tag}", GetTagColor(tag));
+        if (selected == null) return;
+
+        _vault.Settings.TagColors ??= new Dictionary<string, string>();
+        _vault.Settings.TagColors[tag] = ColorToHex(selected.Value);
+        VaultStore.Save(_vault, _password);
+        RefreshNoteTags();
+        RefreshTagPanel();
+        RefreshPasswordTagsPanel();
+    }
+
+    private Color? ShowColorMapDialog(string title, Color initial)
+    {
+        EnsureSettingsColorMaps();
+        var selected = initial;
+        var updating = false;
+
+        var preview = new Border
+        {
+            Width = 30,
+            Height = 30,
+            CornerRadius = new CornerRadius(6),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(selected),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var hexBox = new TextBox
+        {
+            Text = ColorToHex(selected),
+            Height = 30,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x25)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x3A)),
+            CaretBrush = new SolidColorBrush(GetAccentColor()),
+            SelectionBrush = new SolidColorBrush(GetAccentColor()),
+            Padding = new Thickness(10, 0, 10, 0)
+        };
+        hexBox.TextChanged += (_, _) =>
+        {
+            if (updating || !TryParseHexColor(hexBox.Text, out var typed)) return;
+            selected = typed;
+            preview.Background = new SolidColorBrush(selected);
+        };
+
+        var map = new Image
+        {
+            Source = _colorMapSource,
+            Stretch = Stretch.Fill,
+            Cursor = Cursors.Cross,
+            Height = 130
+        };
+        void Pick(Point p)
+        {
+            selected = ColorFromMapPoint(p, Math.Max(map.ActualWidth, 1), Math.Max(map.ActualHeight, 1));
+            preview.Background = new SolidColorBrush(selected);
+            updating = true;
+            hexBox.Text = ColorToHex(selected);
+            updating = false;
+        }
+        map.MouseLeftButtonDown += (_, e) => { map.CaptureMouse(); Pick(e.GetPosition(map)); e.Handled = true; };
+        map.MouseMove += (_, e) => { if (e.LeftButton == MouseButtonState.Pressed) Pick(e.GetPosition(map)); };
+        map.MouseLeftButtonUp += (_, _) => map.ReleaseMouseCapture();
+
+        var dialog = new Window
+        {
+            Owner = this,
+            Title = title,
+            Width = 360,
+            Height = 300,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.Transparent
+        };
+
+        var root = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
+            BorderThickness = new Thickness(1)
+        };
+        var stack = new StackPanel { Margin = new Thickness(18) };
+        var titleBar = new DockPanel { Margin = new Thickness(0, 0, 0, 14), Height = 26 };
+        titleBar.MouseLeftButtonDown += (_, e) => { if (e.ChangedButton == MouseButton.Left) dialog.DragMove(); };
+        titleBar.Children.Add(new TextBlock
+        {
+            Text = title,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var topRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topRow.Children.Add(preview);
+        topRow.Children.Add(hexBox);
+
+        var mapBorder = new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            ClipToBounds = true,
+            Child = map
+        };
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0)
+        };
+        var cancel = new Button { Content = "Cancel", Style = (Style)FindResource("GhostBtn"), Width = 86, Height = 30, Margin = new Thickness(0, 0, 8, 0) };
+        var apply = new Button { Content = "Apply", Style = (Style)FindResource("ToolbarBtn"), Width = 86, Height = 30 };
+        cancel.Click += (_, _) => dialog.DialogResult = false;
+        apply.Click += (_, _) => dialog.DialogResult = true;
+        actions.Children.Add(cancel);
+        actions.Children.Add(apply);
+
+        stack.Children.Add(titleBar);
+        stack.Children.Add(topRow);
+        stack.Children.Add(mapBorder);
+        stack.Children.Add(actions);
+        root.Child = stack;
+        dialog.Content = root;
+
+        return dialog.ShowDialog() == true ? selected : null;
     }
 
     private void FilterByTag(string tag)
@@ -2169,22 +3413,36 @@ public partial class MainWindow : Window
         var allTags = _vault.Tags.OrderBy(t => t).ToList();
         foreach (var tag in allTags)
         {
-            var chip = new Border
-            {
-                Background = _activeTagFilter == tag
-                    ? new SolidColorBrush(Color.FromRgb(0x7C, 0x3A, 0xED))
-                    : new SolidColorBrush(Color.FromRgb(0x22, 0x16, 0x2E)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x7C, 0x3A, 0xED)),
-                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 6),
-                Cursor = Cursors.Hand
-            };
             var t = tag;
-            chip.Child = new TextBlock { Text = t, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xAA, 0xFF)) };
-            chip.MouseLeftButtonDown += (_, _) => { FilterByTag(t); RefreshAllTags(); };
+            var chip = BuildTagChip(t, null, () => { FilterByTag(t); RefreshAllTags(); });
+            if (_activeTagFilter == t)
+            {
+                chip.Background = new SolidColorBrush(BlendColor(Color.FromRgb(0x16, 0x16, 0x16), GetTagColor(t), 0.44));
+                chip.BorderThickness = new Thickness(2);
+            }
             AllTagsPanel.Children.Add(chip);
         }
         if (allTags.Count == 0)
             AllTagsPanel.Children.Add(new TextBlock { Text = "No tags yet", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)) });
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_allowExit && _vault?.Settings?.RunInTray == true)
+        {
+            e.Cancel = true;
+            SaveCurrentNote();
+            HideToTray("Bastion is still running in the tray. Browser autofill stays available until the vault locks.");
+            return;
+        }
+
+        base.OnClosing(e);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        base.OnClosed(e);
     }
 }

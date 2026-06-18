@@ -1,0 +1,84 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="Bastion"
+    Manufacturer="Hazza-uxdev"
+    Version="$(var.Version)"
+    UpgradeCode="{8A7E1A59-6421-4D27-BC3E-F50C506E2B67}"
+    Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Bastion is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="BastionIcon" SourceFile="$(var.PublishDir)\Bastion.ico" />
+    <Property Id="ARPPRODUCTICON" Value="BastionIcon" />
+
+    <Feature Id="MainFeature" Title="Bastion" Level="1">
+      <ComponentGroupRef Id="BastionAppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Bastion" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Bastion" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="BastionAppFiles" Directory="INSTALLFOLDER">
+      <Component Id="BastionExecutable" Guid="{B06EBA20-821D-4E32-8C2E-8F87B26E3FB7}">
+        <File Id="BastionExe" Source="$(var.PublishDir)\Bastion.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="BastionIconFile" Guid="{C6546AD6-40E1-4F14-8174-628EEBC2B5A1}">
+        <File Id="BastionIconFileSource" Source="$(var.PublishDir)\Bastion.ico" KeyPath="yes" />
+      </Component>
+      <Component Id="BrowserExtensionManifest" Directory="BrowserExtensionFolder" Guid="{81E89D9B-DDB0-4DF1-8A41-2C10B5C49F30}">
+        <File Source="$(var.PublishDir)\BrowserExtension\manifest.json" KeyPath="yes" />
+      </Component>
+      <Component Id="BrowserExtensionBackground" Directory="BrowserExtensionFolder" Guid="{56981626-B57B-43EA-947A-BCBA1D02517B}">
+        <File Source="$(var.PublishDir)\BrowserExtension\background.js" KeyPath="yes" />
+      </Component>
+      <Component Id="BrowserExtensionContent" Directory="BrowserExtensionFolder" Guid="{5C573537-7758-4DD6-BE8A-A71D78D78490}">
+        <File Source="$(var.PublishDir)\BrowserExtension\content.js" KeyPath="yes" />
+      </Component>
+      <Component Id="BrowserExtensionPopupHtml" Directory="BrowserExtensionFolder" Guid="{2EF92403-38C1-4B9B-B3BE-16E3101A6575}">
+        <File Source="$(var.PublishDir)\BrowserExtension\popup.html" KeyPath="yes" />
+      </Component>
+      <Component Id="BrowserExtensionPopupJs" Directory="BrowserExtensionFolder" Guid="{784AC3ED-3555-430F-A699-0686093E8CC4}">
+        <File Source="$(var.PublishDir)\BrowserExtension\popup.js" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="BrowserExtensionFolder" Name="BrowserExtension" />
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcut" Guid="{B747489D-7B5B-4D77-9AE4-B677C437D419}">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="Bastion"
+                  Target="[INSTALLFOLDER]Bastion.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="BastionIcon" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Bastion" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="{130F91F2-9DFD-4F58-8612-5E9EB0B87CC2}">
+        <Shortcut Id="ApplicationDesktopShortcut"
+                  Name="Bastion"
+                  Target="[INSTALLFOLDER]Bastion.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="BastionIcon" />
+        <RegistryValue Root="HKCU" Key="Software\Bastion" Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+  </Fragment>
+</Wix>

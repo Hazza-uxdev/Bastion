@@ -3,6 +3,7 @@
 // then refreshes once if Bastion rejects a stale token.
 
 const API = "http://localhost:59432/bastion";
+const SAVE_PROMPT_COOLDOWN_MS = 5 * 60 * 1000;
 
 async function getToken() {
   const stored = await chrome.storage.local.get(["bastionToken"]);
@@ -138,6 +139,26 @@ async function searchCredentials(msg, sender) {
   return [...seen.values()];
 }
 
+async function claimSavePrompt(key) {
+  if (!key) return false;
+  const now = Date.now();
+  const stored = await chrome.storage.local.get(["savePromptClaims"]);
+  const claims = stored.savePromptClaims || {};
+
+  for (const [claimKey, timestamp] of Object.entries(claims)) {
+    if (now - Number(timestamp) > SAVE_PROMPT_COOLDOWN_MS) delete claims[claimKey];
+  }
+
+  if (claims[key] && now - Number(claims[key]) <= SAVE_PROMPT_COOLDOWN_MS) {
+    await chrome.storage.local.set({ savePromptClaims: claims });
+    return false;
+  }
+
+  claims[key] = now;
+  await chrome.storage.local.set({ savePromptClaims: claims });
+  return true;
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   await fetchAndStoreToken();
 });
@@ -179,6 +200,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .then(r => r?.json() ?? { exists: false })
       .then(d => sendResponse(d))
       .catch(() => sendResponse({ exists: false }));
+    return true;
+  }
+  if (msg.type === "CLAIM_SAVE_PROMPT") {
+    claimSavePrompt(msg.key || "")
+      .then(claimed => sendResponse({ claimed }))
+      .catch(() => sendResponse({ claimed: false }));
     return true;
   }
   if (msg.type === "PING") {

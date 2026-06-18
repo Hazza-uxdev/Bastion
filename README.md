@@ -1,7 +1,7 @@
 # 🔐 Bastion
 
 Bastion is a modern, offline-first Windows password vault built with WPF (.NET).
-It securely stores passwords, recovery phrases, secure notes, browser autofill data, and vault history — all encrypted locally.
+It securely stores passwords, recovery phrases, secure notes, encrypted attachments, and crypto tracking data — all encrypted locally.
 
 Your data never leaves your device.
 
@@ -11,18 +11,19 @@ Your data never leaves your device.
 
 - Encrypted password manager
 - Home dashboard with vault statistics
-- Secure notes for recovery phrases and backups
-- Browser extension support for local autofill
-- TOTP / 2FA code support
-- Password generator
-- Fast search, tags, and filtering
+- Secure notes with tags and image/file attachments
+- Relevance graph for connected notes
+- Crypto portfolio tracking (CoinGecko)
+- Fast search and filtering
 - CSV import support
-- Encrypted share export and import
-- Security insights and breach checks
-- Trash recovery and version history
+- Encrypted share import/export
+- Optional encrypted vault backup workflow
 - Auto-lock on inactivity
-- Light and dark theme support
-- Release timeline inside the app
+- Clipboard timeout settings
+- Browser extension autofill bridge
+- Tray/background mode for keeping autofill available while unlocked
+- Windows startup and hidden-to-tray startup options
+- Dark/light theme with custom accent and graph colors
 
 ---
 
@@ -43,7 +44,7 @@ Your data never leaves your device.
    git clone https://github.com/Hazza-uxdev/bastion.git  
    cd bastion  
 
-2. Open the project
+2. Open the solution
 
    Open Bastion.csproj in Visual Studio 2022
 
@@ -65,7 +66,7 @@ Your data never leaves your device.
 
    Release | x64
 
-3. Build the project
+3. Build the solution
 
    Build → Build Solution
 
@@ -89,47 +90,29 @@ Your data never leaves your device.
 
 ## 📁 Data Storage
 
-Vault data is stored locally on your device.
+All encrypted data is stored locally at:
 
-Main vault file:
+%APPDATA%/Bastion/
 
-   vault.dat
-
-App preferences and browser-extension session data are stored at:
-
-   %APPDATA%/Bastion/
-
-This may include:
-- Encrypted vault data
-- Saved settings
+This includes:
+- Encrypted vault
+- Secure notes
+- Note attachments
+- Crypto preferences
+- Cached coin lists
 - Browser extension session token
-- Graph and UI preferences
 
 ---
 
 ## 🔐 Security
 
-- AES-256-GCM encrypted vault data
-- PBKDF2 key derivation
-- Local-only browser extension API
+- AES-256-GCM encrypted vault
 - No cloud sync
 - No telemetry
 - Offline-first design
 - Auto-lock on inactivity
-- Encrypted share exports
-- Clipboard safety handling
-
----
-
-## 🧩 Browser Extension
-
-Bastion includes a browser extension folder:
-
-   BrowserExtension/
-
-Load it as an unpacked extension in Chrome or Firefox, then enable browser autofill in Bastion settings.
-
-The extension talks only to the local Bastion desktop app while it is running.
+- Clipboard timeout cleanup
+- Encrypted backup and share workflows
 
 ---
 
@@ -137,22 +120,17 @@ The extension talks only to the local Bastion desktop app while it is running.
 
 - C# (.NET 8)
 - WPF (XAML)
-- Local browser extension JavaScript
-- AES-256-GCM encryption
-- PBKDF2 key derivation
+- CoinGecko API
 
 ---
 
 ## 🛠 Roadmap
 
-- Installer packaging
-- Stronger password health scoring
-- More detailed encrypted share guidance
-- Secure file attachments
-- Clipboard timeout settings
-- Optional vault backup workflow
+- Secure file attachment refinements
 - More browser extension polish
-- Cross-device sync research
+- Additional graph relevance tuning
+- Password health reporting improvements
+- Cross-platform support
 
 ---
 

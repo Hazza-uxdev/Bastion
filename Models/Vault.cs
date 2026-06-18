@@ -19,6 +19,10 @@ namespace SecureVault.Models
         public bool AutofillEnabled { get; set; } = true;
         public bool DarkTheme { get; set; } = true;
         public int LockMinutes { get; set; } = 3;
+        public int ClipboardTimeoutSeconds { get; set; } = 15;
+        public bool RunInTray { get; set; } = false;
+        public bool StartOnBoot { get; set; } = false;
+        public bool StartHiddenToTray { get; set; } = false;
         public string AccentColor { get; set; } = "#7C3AED";
         public int GeneratorLength { get; set; } = 18;
         public bool GeneratorUppercase { get; set; } = true;
@@ -28,5 +32,6 @@ namespace SecureVault.Models
         public string GraphNodeColor { get; set; } = "#FFEE00AA";
         public string GraphHubColor { get; set; } = "#FFFF00CC";
         public string GraphLineColor { get; set; } = "#8C00C8DC";
+        public Dictionary<string, string> TagColors { get; set; } = new();
     }
 }
