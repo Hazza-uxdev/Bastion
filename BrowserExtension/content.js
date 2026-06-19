@@ -17,8 +17,22 @@
     return [...urls].filter(Boolean);
   }
 
-  function findUsernameInput(scope) {
-    return (scope || document).querySelector([
+  function isElementUsable(input) {
+    if (!input || input.disabled || input.readOnly) return false;
+    const type = (input.getAttribute("type") || "text").toLowerCase();
+    if (["hidden", "submit", "button", "checkbox", "radio", "file", "search"].includes(type)) return false;
+    const rect = input.getBoundingClientRect();
+    return rect.width > 4 && rect.height > 4;
+  }
+
+  function getPasswordInputs(scope) {
+    return [...(scope || document).querySelectorAll("input[type=password], input[autocomplete='current-password'], input[autocomplete='new-password']")]
+      .filter(isElementUsable);
+  }
+
+  function findUsernameInput(scope, passwordInput) {
+    const root = scope || document;
+    const candidates = [...root.querySelectorAll([
       "input[autocomplete='username']",
       "input[type=email]",
       "input[name*=email i]",
@@ -26,7 +40,30 @@
       "input[name*=user i]",
       "input[id*=user i]",
       "input[type=text]"
-    ].join(","));
+    ].join(","))]
+      .filter(input => isElementUsable(input) && input !== passwordInput);
+
+    if (passwordInput && candidates.length > 1) {
+      const passwordRect = passwordInput.getBoundingClientRect();
+      const before = candidates
+        .filter(input => input.getBoundingClientRect().top <= passwordRect.top + 8)
+        .sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+      if (before[0]) return before[0];
+    }
+
+    return candidates[0] || null;
+  }
+
+  function findPasswordForSave(scope, fallbackInput) {
+    const inputs = getPasswordInputs(scope || document).filter(input => input.value);
+    if (inputs.length === 0) return fallbackInput;
+
+    const newPassword = inputs
+      .filter(input => /new-password/i.test(input.getAttribute("autocomplete") || ""))
+      .at(-1);
+    if (newPassword) return newPassword;
+
+    return inputs.at(-1) || fallbackInput;
   }
 
   function runtimeMessage(message) {
@@ -75,9 +112,14 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  async function isPromptIgnoredForSite(url) {
+    const state = await runtimeMessage({ type: "GET_SITE_PROMPT_STATE", url });
+    return state.ignored === true;
+  }
+
   function findLoginFields() {
     if (!document.body) return;
-    const passwordInputs = document.querySelectorAll("input[type=password], input[autocomplete='current-password'], input[autocomplete='new-password']");
+    const passwordInputs = getPasswordInputs(document);
     passwordInputs.forEach(passwordInput => {
       if (passwordInput.dataset.bastionInjected) return;
       passwordInput.dataset.bastionInjected = "1";
@@ -138,10 +180,13 @@
     let inFlight = false;
 
     async function maybePromptToSave() {
-      const usernameInput = findUsernameInput(form || document);
+      if (await isPromptIgnoredForSite(window.location.href)) return;
+
+      const savePasswordInput = findPasswordForSave(form || document, passwordInput);
+      const usernameInput = findUsernameInput(form || document, savePasswordInput);
       const username = usernameInput?.value?.trim() || "";
-      const password = passwordInput.value || "";
-      const lastFill = Number(passwordInput.dataset.bastionFilledAt || 0);
+      const password = savePasswordInput?.value || "";
+      const lastFill = Number(savePasswordInput?.dataset.bastionFilledAt || passwordInput.dataset.bastionFilledAt || 0);
       if (!username || !password || inFlight || Date.now() - lastFill < FILL_SUPPRESS_MS) return;
 
       const credential = {
@@ -214,7 +259,7 @@
       let form = passwordInput;
       while (form && form.tagName !== "FORM") form = form.parentElement;
 
-      const usernameInput = findUsernameInput(form || document);
+      const usernameInput = findUsernameInput(form || document, passwordInput);
       if (usernameInput) setInputValue(usernameInput, response.username || "");
       passwordInput.dataset.bastionFilledAt = String(Date.now());
       setInputValue(passwordInput, response.password);
@@ -296,11 +341,17 @@
           <button data-save style="flex:1;height:30px;border:0;border-radius:7px;background:${accent};color:white;font:600 12px Segoe UI,system-ui;cursor:pointer;">${mode === "update" ? "Update" : "Save"}</button>
           <button data-close style="width:82px;height:30px;border:1px solid #343434;border-radius:7px;background:transparent;color:#bbb;font:12px Segoe UI,system-ui;cursor:pointer;">Not now</button>
         </div>
+        <button data-ignore-site style="width:100%;height:26px;margin-top:8px;border:0;background:transparent;color:#777;font:11px Segoe UI,system-ui;cursor:pointer;">Do not ask on this site</button>
       </div>
     `;
 
     card.querySelectorAll("[data-close]").forEach(button => {
       button.addEventListener("click", () => card.remove());
+    });
+    card.querySelector("[data-ignore-site]").addEventListener("click", async () => {
+      await runtimeMessage({ type: "SET_SITE_PROMPT_IGNORED", url: credential.url, ignored: true });
+      card.remove();
+      showNotification("Bastion save prompts disabled for this site.");
     });
     card.querySelector("[data-save]").addEventListener("click", async () => {
       const saveButton = card.querySelector("[data-save]");
@@ -325,6 +376,19 @@
     document.body.appendChild(card);
     setTimeout(() => card.remove(), 15000);
   }
+
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type !== "BASTION_FILL_ENTRY") return false;
+    const passwordInput = getPasswordInputs(document)[0];
+    if (!passwordInput) {
+      sendResponse({ error: "No password field found on this page." });
+      return false;
+    }
+
+    fillCredentials(msg.entry || {}, passwordInput);
+    sendResponse({ ok: true });
+    return false;
+  });
 
   function showNotification(message) {
     const notification = document.createElement("div");

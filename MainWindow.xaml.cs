@@ -127,6 +127,8 @@ public partial class MainWindow : Window
         foreach (var entry in _vault.Entries)
         {
             entry.Tags ??= new List<string>();
+            if (entry.RotationDays <= 0)
+                entry.RotationDays = 180;
             foreach (var tag in entry.Tags)
                 if (!_vault.Tags.Contains(tag)) _vault.Tags.Add(tag);
         }
@@ -1789,6 +1791,26 @@ public partial class MainWindow : Window
     private void ShowStale_Click(object sender, RoutedEventArgs e) { SecurityTitle.Text = "AGED PASSWORDS";      ShowAgedList(SecurityInsights.FindStale(_vault.Entries)); }
     private void ShowMissingTotp_Click(object sender, RoutedEventArgs e) { SecurityTitle.Text = "PASSWORDS WITHOUT 2FA"; ShowMissingTotpList(SecurityInsights.FindMissingTotp(_vault.Entries)); }
 
+    private void ExportSecurityReport_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Markdown report (*.md)|*.md|Text file (*.txt)|*.txt",
+            FileName = $"bastion-security-report-{DateTime.Now:yyyyMMdd-HHmm}.md"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            File.WriteAllText(dlg.FileName, BuildSecurityReportMarkdown(), Encoding.UTF8);
+            new BastionDialog("Report exported", $"Security report saved to:\n{dlg.FileName}", false) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            new BastionDialog("Export failed", ex.Message, false) { Owner = this }.ShowDialog();
+        }
+    }
+
     private async void RunBreachCheck_Click(object sender, RoutedEventArgs e)
     {
         SecurityTitle.Text = "BREACH CHECK";
@@ -1813,7 +1835,7 @@ public partial class MainWindow : Window
         {
             e2.Title, e2.Username,
             StrengthLabel = SecurityInsights.AnalyzePassword(e2.Password).Display,
-            Details = $"{SecurityInsights.AnalyzePassword(e2.Password).Summary} - updated {e2.UpdatedAt:MMM d, yyyy}"
+            Details = $"{SecurityInsights.AnalyzePassword(e2.Password).Summary} - updated {e2.UpdatedAt:MMM d, yyyy} - review every {e2.RotationDays} days"
         }).ToList();
     }
 
@@ -1823,8 +1845,8 @@ public partial class MainWindow : Window
         {
             e2.Title,
             e2.Username,
-            StrengthLabel = $"{(DateTime.Now - e2.UpdatedAt).Days} days old",
-            Details = "Review and rotate if this login is still active"
+            StrengthLabel = $"{SecurityInsights.PasswordAgeDays(e2)} days old",
+            Details = $"Review rule: {e2.RotationDays} days"
         }).ToList();
     }
 
@@ -1835,8 +1857,51 @@ public partial class MainWindow : Window
             e2.Title,
             e2.Username,
             StrengthLabel = "No 2FA",
-            Details = "Add a TOTP secret when the service supports it"
+            Details = SecurityInsights.TotpRecommendation(e2)
         }).ToList();
+    }
+
+    private string BuildSecurityReportMarkdown()
+    {
+        var report = SecurityInsights.BuildReport(_vault.Entries);
+        var weak = SecurityInsights.FindWeak(_vault.Entries);
+        var reused = SecurityInsights.FindReused(_vault.Entries);
+        var stale = SecurityInsights.FindStale(_vault.Entries);
+        var missingTotp = SecurityInsights.FindMissingTotp(_vault.Entries);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# Bastion Security Report");
+        sb.AppendLine();
+        sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
+        sb.AppendLine();
+        sb.AppendLine($"Overall health: {report.OverallScore}%");
+        sb.AppendLine($"Average password score: {report.AveragePasswordScore}%");
+        sb.AppendLine(report.Summary);
+        sb.AppendLine();
+
+        AppendSecuritySection(sb, "Weak Passwords", weak.Select(e =>
+            $"{e.Title} ({e.Username}) - {SecurityInsights.AnalyzePassword(e.Password).Display} - {SecurityInsights.AnalyzePassword(e.Password).Summary}"));
+        AppendSecuritySection(sb, "Reused Passwords", reused.Select(e =>
+            $"{e.Title} ({e.Username})"));
+        AppendSecuritySection(sb, "Aged Passwords", stale.Select(e =>
+            $"{e.Title} ({e.Username}) - {SecurityInsights.PasswordAgeDays(e)} days old, review every {e.RotationDays} days"));
+        AppendSecuritySection(sb, "Missing 2FA", missingTotp.Select(e =>
+            $"{e.Title} ({e.Username}) - {SecurityInsights.TotpRecommendation(e)}"));
+
+        return sb.ToString();
+    }
+
+    private static void AppendSecuritySection(StringBuilder sb, string title, IEnumerable<string> rows)
+    {
+        sb.AppendLine($"## {title}");
+        var any = false;
+        foreach (var row in rows)
+        {
+            any = true;
+            sb.AppendLine($"- {row}");
+        }
+        if (!any) sb.AppendLine("- None");
+        sb.AppendLine();
     }
 
     // ---- TRASH ----

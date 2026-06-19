@@ -7,7 +7,7 @@
     color-scheme: dark;
     --bg: #111111;
     --panel: #181818;
-    --panel-2: #1f1f1f;
+    --panel-2: #202020;
     --border: #303030;
     --text: #f1f1f1;
     --muted: #8d8d8d;
@@ -20,7 +20,7 @@
   * { box-sizing: border-box; }
 
   body {
-    width: 318px;
+    width: 340px;
     margin: 0;
     background:
       radial-gradient(circle at 20% 0%, rgba(124, 58, 237, 0.18), transparent 34%),
@@ -54,7 +54,6 @@
     margin: 0;
     font-size: 14px;
     font-weight: 700;
-    letter-spacing: 0;
   }
 
   .version {
@@ -63,8 +62,9 @@
     margin-top: 1px;
   }
 
-  .status {
-    padding: 13px;
+  .status,
+  .panel {
+    padding: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: rgba(24, 24, 24, 0.94);
@@ -100,16 +100,38 @@
     font-weight: 650;
   }
 
-  .status-copy {
+  .status-copy,
+  .muted {
     color: var(--muted);
     font-size: 12px;
     line-height: 1.45;
   }
 
-  .actions {
+  .panel {
+    margin-top: 10px;
+  }
+
+  .row {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    margin-top: 12px;
+  }
+
+  input[type="search"] {
+    width: 100%;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    font: 12px "Segoe UI", system-ui, sans-serif;
+    padding: 0 10px;
+    outline: none;
+  }
+
+  input[type="search"]:focus {
+    border-color: var(--accent);
   }
 
   button {
@@ -124,14 +146,48 @@
   }
 
   button.primary {
-    flex: 1;
     border-color: var(--accent);
     background: var(--accent);
     color: white;
   }
 
-  button:hover {
-    filter: brightness(1.12);
+  button:hover { filter: brightness(1.12); }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  .credentials {
+    display: grid;
+    gap: 7px;
+    margin-top: 9px;
+    max-height: 210px;
+    overflow: auto;
+  }
+
+  .entry {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 9px;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    background: #171717;
+  }
+
+  .entry-title {
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .entry-sub {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
   }
 
   .footer {
@@ -148,7 +204,7 @@
       <div class="logo">B</div>
       <div>
         <h1>Bastion Autofill</h1>
-        <div class="version">Extension v1.0.3</div>
+        <div class="version">Extension v1.0.5</div>
       </div>
     </div>
 
@@ -160,11 +216,25 @@
       <div class="status-copy" id="statusCopy">Looking for the local vault bridge...</div>
     </div>
 
-    <div class="actions">
-      <button class="primary" id="refresh">Refresh</button>
+    <div class="panel">
+      <div class="row">
+        <div>
+          <div class="status-title" id="siteTitle">Current site</div>
+          <div class="muted" id="siteHost">Loading...</div>
+        </div>
+        <button id="togglePrompts">Loading</button>
+      </div>
     </div>
 
-    <div class="footer">Bastion only talks to the local desktop app. Unlock the vault once before autofill can access saved passwords.</div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:8px;">
+        <input type="search" id="search" placeholder="Search saved logins">
+        <button class="primary" id="refresh">Refresh</button>
+      </div>
+      <div class="credentials" id="credentials"></div>
+    </div>
+
+    <div class="footer">Autofill only works while the Bastion desktop vault is unlocked. Save prompts can be disabled per site.</div>
   </div>
   <script src="popup.js"></script>
 </body>

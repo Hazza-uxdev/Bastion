@@ -126,7 +126,7 @@ public class BastionLocalApi : IDisposable
             // GET /bastion/ping
             if (path.EndsWith("/ping"))
             {
-                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.4\"}");
+                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.5\"}");
                 return;
             }
 
@@ -167,14 +167,16 @@ public class BastionLocalApi : IDisposable
                 }
 
                 var existing = FindCredential(request);
+                var samePasswordHost = FindCredentialWithSameHostAndPassword(request);
                 var exactMatch = existing != null && existing.Password == request.Password;
+                var hostPasswordMatch = samePasswordHost != null;
                 Write(ctx, JsonSerializer.Serialize(new
                 {
-                    exists = exactMatch,
+                    exists = exactMatch || hostPasswordMatch,
                     usernameMatch = existing != null,
-                    status = exactMatch ? "exists" : existing != null ? "update" : "new",
-                    id = existing?.Id ?? "",
-                    title = existing?.Title ?? ""
+                    status = exactMatch || hostPasswordMatch ? "exists" : existing != null ? "update" : "new",
+                    id = (existing ?? samePasswordHost)?.Id ?? "",
+                    title = (existing ?? samePasswordHost)?.Title ?? ""
                 }, JsonOptions));
                 return;
             }
@@ -193,6 +195,13 @@ public class BastionLocalApi : IDisposable
 
                 var host = NormalizeHost(request.Url);
                 var existing = FindCredential(request);
+                var samePasswordHost = FindCredentialWithSameHostAndPassword(request);
+                if (existing == null && samePasswordHost != null)
+                {
+                    Write(ctx, JsonSerializer.Serialize(new { status = "exists", duplicate = true }, JsonOptions));
+                    return;
+                }
+
                 if (existing == null)
                 {
                     _vault.Entries.Add(new VaultEntry
@@ -240,6 +249,18 @@ public class BastionLocalApi : IDisposable
             !e.IsDeleted &&
             EntryMatchesQuery(e, host) &&
             string.Equals(e.Username?.Trim(), username, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private VaultEntry? FindCredentialWithSameHostAndPassword(SaveCredentialRequest request)
+    {
+        var host = NormalizeHost(request.Url);
+        var password = request.Password ?? "";
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrEmpty(password)) return null;
+
+        return _vault.Entries.FirstOrDefault(e =>
+            !e.IsDeleted &&
+            EntryMatchesQuery(e, host) &&
+            e.Password == password);
     }
 
     private static bool TryApplyCors(HttpListenerContext ctx)

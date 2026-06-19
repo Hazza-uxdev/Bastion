@@ -14,6 +14,7 @@ namespace SecureVault.Models
         public bool IsPinned { get; set; } = false;
         public bool IsDeleted { get; set; } = false;
         public string TotpSecret { get; set; } = "";
+        public int RotationDays { get; set; } = 180;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
         public string TagsText => string.Join(", ", Tags);

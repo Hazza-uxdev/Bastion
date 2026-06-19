@@ -24,6 +24,7 @@ namespace SecureVault
             LowercaseCheck.IsChecked = _settings.GeneratorLowercase;
             DigitsCheck.IsChecked = _settings.GeneratorDigits;
             SymbolsCheck.IsChecked = _settings.GeneratorSymbols;
+            RotationDaysBox.Text = Math.Clamp(Entry.RotationDays <= 0 ? 180 : Entry.RotationDays, 30, 3650).ToString();
 
             if (entry != null)
             {
@@ -33,6 +34,7 @@ namespace SecureVault
                 PasswordBox.Password = entry.Password;
                 TagsBox.Text = string.Join(", ", entry.Tags);
                 TotpSecretBox.Text = entry.TotpSecret;
+                RotationDaysBox.Text = Math.Clamp(entry.RotationDays <= 0 ? 180 : entry.RotationDays, 30, 3650).ToString();
             }
             TitleBox.Focus();
             UpdateStrength();
@@ -49,6 +51,9 @@ namespace SecureVault
             Entry.Url      = UrlBox.Text;
             Entry.Password = PasswordBox.Password;
             Entry.TotpSecret = TotpService.NormalizeSecret(TotpSecretBox.Text);
+            Entry.RotationDays = int.TryParse(RotationDaysBox.Text, out var rotationDays)
+                ? Math.Clamp(rotationDays, 30, 3650)
+                : 180;
             Entry.Tags = TagsBox.Text
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(t => t.ToLowerInvariant())
@@ -70,6 +75,51 @@ namespace SecureVault
 
         private void GeneratePassword_Click(object sender, RoutedEventArgs e)
             => PasswordBox.Password = GeneratePassword();
+
+        private void GeneratorPreset_Click(object sender, RoutedEventArgs e)
+        {
+            var preset = (sender as FrameworkElement)?.Tag?.ToString();
+            switch (preset)
+            {
+                case "maximum":
+                    GeneratorLengthBox.Text = "28";
+                    UppercaseCheck.IsChecked = LowercaseCheck.IsChecked = DigitsCheck.IsChecked = SymbolsCheck.IsChecked = true;
+                    break;
+                case "memorable":
+                    GeneratorLengthBox.Text = "24";
+                    UppercaseCheck.IsChecked = LowercaseCheck.IsChecked = true;
+                    DigitsCheck.IsChecked = SymbolsCheck.IsChecked = false;
+                    PasswordBox.Password = GeneratePassphrase();
+                    return;
+                case "pin":
+                    GeneratorLengthBox.Text = "8";
+                    UppercaseCheck.IsChecked = LowercaseCheck.IsChecked = SymbolsCheck.IsChecked = false;
+                    DigitsCheck.IsChecked = true;
+                    break;
+                default:
+                    GeneratorLengthBox.Text = "20";
+                    UppercaseCheck.IsChecked = LowercaseCheck.IsChecked = DigitsCheck.IsChecked = SymbolsCheck.IsChecked = true;
+                    break;
+            }
+
+            PasswordBox.Password = GeneratePassword();
+        }
+
+        private static string GeneratePassphrase()
+        {
+            string[] words =
+            {
+                "amber", "atlas", "brave", "cinder", "delta", "ember", "frost", "harbor",
+                "ivory", "juno", "kepler", "lumen", "matrix", "nova", "onyx", "pixel",
+                "quartz", "raven", "signal", "titan", "umbra", "vector", "willow", "zenith"
+            };
+
+            var selected = Enumerable.Range(0, 4)
+                .Select(_ => words[RandomNumberGenerator.GetInt32(words.Length)])
+                .ToArray();
+            var suffix = RandomNumberGenerator.GetInt32(10, 99);
+            return string.Join("-", selected) + "-" + suffix;
+        }
 
         private void CopyPassword_Click(object sender, RoutedEventArgs e)
         { if (!string.IsNullOrEmpty(PasswordBox.Password)) Clipboard.SetText(PasswordBox.Password); }

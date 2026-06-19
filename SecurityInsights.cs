@@ -12,6 +12,7 @@ namespace SecureVault
 {
     public static class SecurityInsights
     {
+        private static readonly Dictionary<string, int> BreachCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly string[] CommonPasswordFragments =
         {
             "password", "passw0rd", "admin", "qwerty", "letmein", "welcome",
@@ -113,9 +114,8 @@ namespace SecureVault
 
         public static List<VaultEntry> FindStale(IEnumerable<VaultEntry> entries, int days = 180)
         {
-            var cutoff = DateTime.Now.AddDays(-days);
             return entries
-                .Where(e => !e.IsDeleted && e.UpdatedAt < cutoff)
+                .Where(e => !e.IsDeleted && IsPasswordStale(e, days))
                 .OrderBy(e => e.UpdatedAt)
                 .ToList();
         }
@@ -148,6 +148,27 @@ namespace SecureVault
                 : $"{active.Count} active passwords - {weak} weak, {reused} reused, {stale} older than 180 days, {missingTotp} without 2FA.";
 
             return new PasswordHealthReport(overall, average, active.Count, weak, veryWeak, reused, duplicates, stale, missingTotp, summary);
+        }
+
+        public static bool IsPasswordStale(VaultEntry entry, int fallbackDays = 180)
+        {
+            var days = entry.RotationDays > 0 ? entry.RotationDays : fallbackDays;
+            return entry.UpdatedAt < DateTime.Now.AddDays(-days);
+        }
+
+        public static int PasswordAgeDays(VaultEntry entry)
+            => Math.Max(0, (DateTime.Now.Date - entry.UpdatedAt.Date).Days);
+
+        public static string TotpRecommendation(VaultEntry entry)
+        {
+            var text = $"{entry.Title} {entry.Url} {string.Join(" ", entry.Tags)}".ToLowerInvariant();
+            if (new[] { "bank", "finance", "paypal", "stripe", "coinbase", "crypto", "wallet", "exchange" }.Any(text.Contains))
+                return "High priority: finance or crypto login";
+            if (new[] { "github", "gitlab", "cloud", "aws", "azure", "google", "microsoft", "admin", "server" }.Any(text.Contains))
+                return "High priority: developer or admin login";
+            if (new[] { "email", "mail", "account", "identity" }.Any(text.Contains))
+                return "High priority: identity or email login";
+            return "Recommended when the service supports it";
         }
 
         private static bool HasKeyboardOrAlphabetSequence(string value)
@@ -188,14 +209,22 @@ namespace SecureVault
             {
                 using var sha1 = SHA1.Create();
                 var hash = Convert.ToHexString(sha1.ComputeHash(Encoding.UTF8.GetBytes(password)));
+                if (BreachCache.TryGetValue(hash, out var cached))
+                    return cached;
+
                 var prefix = hash[..5]; var suffix = hash[5..];
                 var resp = await _http.GetStringAsync($"https://api.pwnedpasswords.com/range/{prefix}");
                 foreach (var line in resp.Split('\n'))
                 {
                     var parts = line.Split(':');
                     if (parts[0].Trim().Equals(suffix, StringComparison.OrdinalIgnoreCase))
-                        return int.Parse(parts[1].Trim());
+                    {
+                        var count = int.Parse(parts[1].Trim());
+                        BreachCache[hash] = count;
+                        return count;
+                    }
                 }
+                BreachCache[hash] = 0;
                 return 0;
             }
             catch { return -1; } // -1 = check failed

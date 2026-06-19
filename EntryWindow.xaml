@@ -154,6 +154,12 @@
                 </StackPanel>
                 <TextBlock x:Name="StrengthText" Text="Strength: -" FontSize="11" Foreground="#777777" Margin="0,6,0,12"/>
 
+                <TextBlock Text="PASSWORD AGE RULE" FontSize="10" FontWeight="SemiBold" Foreground="#555555" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBox Name="RotationDaysBox" Style="{StaticResource FlatInput}" Width="80" HorizontalAlignment="Left"/>
+                    <TextBlock Text="days before review" Foreground="#777777" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+
                 <TextBlock Text="TAGS" FontSize="10" FontWeight="SemiBold" Foreground="#555555" Margin="0,0,0,6"/>
                 <TextBox Name="TagsBox" Style="{StaticResource FlatInput}" Margin="0,0,0,6"
                          ToolTip="Comma-separated tags, for example work, finance"/>
@@ -172,6 +178,13 @@
 
                 <Expander Header="Password generator settings" Foreground="#777777" Margin="0,0,0,8">
                     <StackPanel Margin="0,8,0,0">
+                        <TextBlock Text="Presets" FontSize="11" Foreground="#555555" Margin="0,0,0,4"/>
+                        <WrapPanel Margin="0,0,0,8">
+                            <Button Content="Strong" Tag="strong" Style="{StaticResource GhostBtn}" Height="28" Padding="10,0" Margin="0,0,6,6" Click="GeneratorPreset_Click"/>
+                            <Button Content="Maximum" Tag="maximum" Style="{StaticResource GhostBtn}" Height="28" Padding="10,0" Margin="0,0,6,6" Click="GeneratorPreset_Click"/>
+                            <Button Content="Memorable" Tag="memorable" Style="{StaticResource GhostBtn}" Height="28" Padding="10,0" Margin="0,0,6,6" Click="GeneratorPreset_Click"/>
+                            <Button Content="PIN" Tag="pin" Style="{StaticResource GhostBtn}" Height="28" Padding="10,0" Margin="0,0,6,6" Click="GeneratorPreset_Click"/>
+                        </WrapPanel>
                         <TextBlock Text="Length" FontSize="11" Foreground="#555555" Margin="0,0,0,4"/>
                         <TextBox Name="GeneratorLengthBox" Style="{StaticResource FlatInput}" Width="80" HorizontalAlignment="Left" Margin="0,0,0,8"/>
                         <WrapPanel>
