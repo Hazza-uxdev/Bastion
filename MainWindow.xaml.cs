@@ -135,6 +135,14 @@ public partial class MainWindow : Window
             note.Tags ??= new List<string>();
             note.History ??= new List<NoteSnapshot>();
             note.Attachments ??= new List<NoteAttachment>();
+            foreach (var attachment in note.Attachments)
+            {
+                if (string.IsNullOrWhiteSpace(attachment.Id))
+                    attachment.Id = Guid.NewGuid().ToString();
+                attachment.FileName = GetReadableAttachmentFileName(attachment.FileName);
+                if (string.IsNullOrWhiteSpace(attachment.Sha256) && !string.IsNullOrWhiteSpace(attachment.DataBase64))
+                    attachment.Sha256 = ComputeAttachmentHash(attachment.DataBase64);
+            }
             foreach (var tag in note.Tags)
                 if (!_vault.Tags.Contains(tag)) _vault.Tags.Add(tag);
         }
@@ -943,6 +951,7 @@ public partial class MainWindow : Window
         NoteWordCount.Text = "0 words";
         NoteTagsPanel.Children.Clear();
         AttachmentsList.ItemsSource = null;
+        if (AttachmentSummaryText != null) AttachmentSummaryText.Text = "No attachments";
         InlineAttachmentsPanel.Children.Clear();
         InlineAttachmentsHost.Visibility = Visibility.Collapsed;
         OutlineList.ItemsSource = null;
@@ -1207,16 +1216,16 @@ public partial class MainWindow : Window
             foreach (var link in candidates
                          .Where(l => ReferenceEquals(l.A, note) || ReferenceEquals(l.B, note))
                          .OrderByDescending(l => l.Score)
-                         .Take(4))
+                         .Take(5))
             {
                 topKeys.Add(GraphPairKey(link.A, link.B));
             }
         }
 
         return candidates
-            .Where(l => l.Explicit || l.Score >= 0.34 || (l.Score >= 0.16 && topKeys.Contains(GraphPairKey(l.A, l.B))))
+            .Where(l => l.Explicit || l.Score >= 0.30 || (l.Score >= 0.14 && topKeys.Contains(GraphPairKey(l.A, l.B))))
             .OrderByDescending(l => l.Score)
-            .Take(Math.Max(12, notes.Count * 5))
+            .Take(Math.Max(16, notes.Count * 6))
             .ToList();
     }
 
@@ -1248,7 +1257,10 @@ public partial class MainWindow : Window
                 AddGraphTerm(terms, term, 3.0);
 
         var searchText = $"{note.Title} {note.Folder} {string.Join(" ", note.Tags ?? new List<string>())} {note.Body}".ToLowerInvariant();
-        return new GraphProfile(terms, titleTerms, tags, DetectGraphDomains(terms.Keys, searchText), searchText);
+        var domains = DetectGraphDomains(terms.Keys, searchText);
+        foreach (var domain in domains)
+            AddGraphTerm(terms, $"topic:{domain}", 2.15);
+        return new GraphProfile(terms, titleTerms, tags, domains, searchText);
     }
 
     private static double ScoreNoteRelevance(
@@ -1270,14 +1282,14 @@ public partial class MainWindow : Window
             score += 0.12;
 
         var termSimilarity = WeightedGraphSimilarity(pa.Terms, pb.Terms);
-        score += Math.Min(0.42, termSimilarity * 0.78);
+        score += Math.Min(0.44, termSimilarity * 0.82);
 
         var titleOverlap = pa.TitleTerms.Intersect(pb.Terms.Keys, StringComparer.OrdinalIgnoreCase).Count()
                          + pb.TitleTerms.Intersect(pa.Terms.Keys, StringComparer.OrdinalIgnoreCase).Count();
         score += Math.Min(0.18, titleOverlap * 0.045);
 
         var sharedDomains = pa.Domains.Intersect(pb.Domains, StringComparer.OrdinalIgnoreCase).Count();
-        score += Math.Min(0.24, sharedDomains * 0.14);
+        score += Math.Min(0.32, sharedDomains * 0.16);
 
         return Math.Clamp(score, 0, 1);
     }
@@ -1300,10 +1312,19 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(text)) yield break;
         foreach (Match match in Regex.Matches(text.ToLowerInvariant(), "[a-z0-9][a-z0-9+#.-]{1,}"))
         {
-            var term = match.Value.Trim('.', '-', '_');
+            var term = NormalizeGraphTerm(match.Value.Trim('.', '-', '_'));
             if (term.Length < 2 || GraphStopWords.Contains(term)) continue;
             yield return term;
         }
+    }
+
+    private static string NormalizeGraphTerm(string term)
+    {
+        if (term.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && term.Length > 5)
+            return term[..^3] + "y";
+        if (term.EndsWith("s", StringComparison.OrdinalIgnoreCase) && term.Length > 4 && !term.EndsWith("ss", StringComparison.OrdinalIgnoreCase))
+            return term[..^1];
+        return term;
     }
 
     private static void AddGraphTerm(Dictionary<string, double> terms, string term, double weight)
@@ -1343,11 +1364,11 @@ public partial class MainWindow : Window
 
     private static readonly Dictionary<string, string[]> GraphDomainKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ai"] = new[] { "ai", "artificial", "intelligence", "llm", "gpt", "openai", "claude", "anthropic", "codex", "model", "prompt", "api", "agent" },
-        ["github"] = new[] { "github", "git", "repo", "repository", "branch", "commit", "pull", "request", "pr", "issue", "actions", "workflow" },
-        ["security"] = new[] { "security", "cyber", "password", "vault", "secret", "token", "malware", "threat", "vulnerability", "recovery", "encrypt", "encrypted" },
-        ["crypto"] = new[] { "crypto", "wallet", "seed", "blockchain", "coin", "bitcoin", "ethereum", "recovery", "phrase" },
-        ["cloud"] = new[] { "cloud", "azure", "aws", "server", "service", "deployment", "hosting", "api" }
+        ["ai"] = new[] { "ai", "artificial", "intelligence", "llm", "gpt", "openai", "claude", "anthropic", "codex", "model", "prompt", "agent", "gemini", "copilot", "cursor" },
+        ["github"] = new[] { "github", "git", "repo", "repository", "branch", "commit", "pull", "request", "pr", "issue", "actions", "workflow", "codespace", "gist", "release" },
+        ["security"] = new[] { "security", "cyber", "password", "vault", "secret", "token", "malware", "threat", "vulnerability", "recovery", "encrypt", "encrypted", "totp", "2fa", "mfa", "passkey" },
+        ["crypto"] = new[] { "crypto", "wallet", "seed", "blockchain", "coin", "bitcoin", "ethereum", "recovery", "phrase", "ledger", "exchange" },
+        ["cloud"] = new[] { "cloud", "azure", "aws", "server", "service", "deployment", "hosting", "docker", "kubernetes" }
     };
 
     private void DrawGraphLines(List<SecureNote> notes, List<GraphLink> links)
@@ -1749,18 +1770,24 @@ public partial class MainWindow : Window
 
     private void RunSecurityCheck()
     {
+        var report = SecurityInsights.BuildReport(_vault.Entries);
         var weak   = SecurityInsights.FindWeak(_vault.Entries);
         var reused = SecurityInsights.FindReused(_vault.Entries);
         var dupes  = SecurityInsights.FindDuplicates(_vault.Entries);
+        HealthScoreText.Text = $"{report.OverallScore}%";
         WeakCount.Text   = weak.Count.ToString();
         ReusedCount.Text = reused.Count.ToString();
         DupeCount.Text   = dupes.Count.ToString();
+        SecuritySummaryText.Text = report.Summary + $" Average password score: {report.AveragePasswordScore}%.";
+        SecurityTitle.Text = "WEAK PASSWORDS";
         ShowWeakList(weak);
     }
 
     private void ShowWeak_Click(object sender, RoutedEventArgs e)  { SecurityTitle.Text = "WEAK PASSWORDS";      ShowWeakList(SecurityInsights.FindWeak(_vault.Entries)); }
     private void ShowReused_Click(object sender, RoutedEventArgs e){ SecurityTitle.Text = "REUSED PASSWORDS";    ShowWeakList(SecurityInsights.FindReused(_vault.Entries)); }
     private void ShowDupes_Click(object sender, RoutedEventArgs e) { SecurityTitle.Text = "DUPLICATE ENTRIES";   ShowWeakList(SecurityInsights.FindDuplicates(_vault.Entries)); }
+    private void ShowStale_Click(object sender, RoutedEventArgs e) { SecurityTitle.Text = "AGED PASSWORDS";      ShowAgedList(SecurityInsights.FindStale(_vault.Entries)); }
+    private void ShowMissingTotp_Click(object sender, RoutedEventArgs e) { SecurityTitle.Text = "PASSWORDS WITHOUT 2FA"; ShowMissingTotpList(SecurityInsights.FindMissingTotp(_vault.Entries)); }
 
     private async void RunBreachCheck_Click(object sender, RoutedEventArgs e)
     {
@@ -1786,7 +1813,29 @@ public partial class MainWindow : Window
         {
             e2.Title, e2.Username,
             StrengthLabel = SecurityInsights.AnalyzePassword(e2.Password).Display,
-            Details = SecurityInsights.AnalyzePassword(e2.Password).Summary
+            Details = $"{SecurityInsights.AnalyzePassword(e2.Password).Summary} - updated {e2.UpdatedAt:MMM d, yyyy}"
+        }).ToList();
+    }
+
+    private void ShowAgedList(System.Collections.Generic.List<VaultEntry> entries)
+    {
+        SecurityList.ItemsSource = entries.Select(e2 => new
+        {
+            e2.Title,
+            e2.Username,
+            StrengthLabel = $"{(DateTime.Now - e2.UpdatedAt).Days} days old",
+            Details = "Review and rotate if this login is still active"
+        }).ToList();
+    }
+
+    private void ShowMissingTotpList(System.Collections.Generic.List<VaultEntry> entries)
+    {
+        SecurityList.ItemsSource = entries.Select(e2 => new
+        {
+            e2.Title,
+            e2.Username,
+            StrengthLabel = "No 2FA",
+            Details = "Add a TOTP secret when the service supports it"
         }).ToList();
     }
 
@@ -2902,7 +2951,7 @@ public partial class MainWindow : Window
             {
                 var image = Clipboard.GetImage();
                 if (image == null) return false;
-                var fileName = $"pasted-image-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                var fileName = $"Pasted image {DateTime.Now:yyyy-MM-dd HH-mm-ss}.png";
                 AddImageAttachment(image, fileName);
                 return true;
             }
@@ -2931,8 +2980,7 @@ public partial class MainWindow : Window
             }
 
             var data = File.ReadAllBytes(fileName);
-            AddAttachmentBytes(info.Name, GetContentType(fileName), data);
-            added = true;
+            added |= AddAttachmentBytes(info.Name, GetContentType(fileName), data);
         }
         if (added)
         {
@@ -2948,31 +2996,52 @@ public partial class MainWindow : Window
         encoder.Frames.Add(BitmapFrame.Create(source));
         using var stream = new MemoryStream();
         encoder.Save(stream);
-        AddAttachmentBytes(fileName, "image/png", stream.ToArray());
-        SaveCurrentNote();
-        RefreshAttachments();
+        if (AddAttachmentBytes(fileName, "image/png", stream.ToArray()))
+        {
+            SaveCurrentNote();
+            RefreshAttachments();
+        }
     }
 
-    private void AddAttachmentBytes(string fileName, string contentType, byte[] data)
+    private bool AddAttachmentBytes(string fileName, string contentType, byte[] data)
     {
-        if (_currentNote == null) return;
+        if (_currentNote == null || data.Length == 0) return false;
+        var hash = ComputeAttachmentHash(data);
+        if (_currentNote.Attachments.Any(a =>
+                string.Equals(GetAttachmentHash(a), hash, StringComparison.OrdinalIgnoreCase)))
+        {
+            NoteSaveStatus.Text = "Attachment already exists on this note.";
+            return false;
+        }
+
         _currentNote.Attachments.Add(new NoteAttachment
         {
-            FileName = string.IsNullOrWhiteSpace(fileName) ? "attachment" : fileName,
+            FileName = GetReadableAttachmentFileName(fileName),
             ContentType = contentType,
-            DataBase64 = Convert.ToBase64String(data)
+            DataBase64 = Convert.ToBase64String(data),
+            Sha256 = hash
         });
+        NoteSaveStatus.Text = "Attachment added.";
+        return true;
     }
 
     private void RefreshAttachments()
     {
         if (AttachmentsList == null) return;
-        AttachmentsList.ItemsSource = _currentNote?.Attachments
+        var attachments = _currentNote?.Attachments ?? new List<NoteAttachment>();
+        AttachmentsList.ItemsSource = attachments
             .Select(a => new AttachmentView(
                 a.Id,
-                string.IsNullOrWhiteSpace(a.FileName) ? "Attachment" : a.FileName,
-                $"{AttachmentKind(a)} - {FormatFileSize(GetAttachmentSizeBytes(a))}"))
+                GetReadableAttachmentFileName(a.FileName),
+                $"{AttachmentKind(a)} - {FormatFileSize(GetAttachmentSizeBytes(a))} - added {a.AddedAt:MMM d}"))
             .ToList();
+        if (AttachmentSummaryText != null)
+        {
+            var totalBytes = attachments.Sum(GetAttachmentSizeBytes);
+            AttachmentSummaryText.Text = attachments.Count == 0
+                ? "No attachments"
+                : $"{attachments.Count} encrypted attachment{(attachments.Count == 1 ? "" : "s")} - {FormatFileSize(totalBytes)} total";
+        }
         RefreshInlineAttachments();
     }
 
@@ -3035,7 +3104,7 @@ public partial class MainWindow : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = attachment.FileName,
+            Text = GetReadableAttachmentFileName(attachment.FileName),
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
@@ -3063,6 +3132,18 @@ public partial class MainWindow : Window
         };
         open.Click += OpenAttachment_Click;
 
+        var save = new Button
+        {
+            Content = "Save As",
+            Style = (Style)FindResource("GhostBtn"),
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(8, 0, 8, 0),
+            Tag = attachment.Id,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        save.Click += SaveAttachment_Click;
+
         var remove = new Button
         {
             Content = "Remove",
@@ -3075,6 +3156,7 @@ public partial class MainWindow : Window
         remove.Click += RemoveAttachment_Click;
 
         actions.Children.Add(open);
+        actions.Children.Add(save);
         actions.Children.Add(remove);
         stack.Children.Add(actions);
         card.Child = stack;
@@ -3115,6 +3197,12 @@ public partial class MainWindow : Window
             OpenAttachment(id);
     }
 
+    private void SaveAttachment_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string id)
+            SaveAttachment(id);
+    }
+
     private void OpenAttachment(string id)
     {
         if (_currentNote == null) return;
@@ -3128,13 +3216,37 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
     }
 
+    private void SaveAttachment(string id)
+    {
+        if (_currentNote == null) return;
+        var attachment = _currentNote.Attachments.FirstOrDefault(a => a.Id == id);
+        if (attachment == null) return;
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = MakeSafeFileName(GetReadableAttachmentFileName(attachment.FileName)),
+            Filter = "All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            File.WriteAllBytes(dlg.FileName, Convert.FromBase64String(attachment.DataBase64));
+            NoteSaveStatus.Text = "Attachment saved outside Bastion.";
+        }
+        catch (Exception ex)
+        {
+            new BastionDialog("Attachment save failed", ex.Message, false) { Owner = this }.ShowDialog();
+        }
+    }
+
     private void RemoveAttachment_Click(object sender, RoutedEventArgs e)
     {
         if (_currentNote == null || ((FrameworkElement)sender).Tag is not string id) return;
         var attachment = _currentNote.Attachments.FirstOrDefault(a => a.Id == id);
         if (attachment == null) return;
 
-        var dlg = new BastionDialog($"Remove \"{attachment.FileName}\"?",
+        var dlg = new BastionDialog($"Remove \"{GetReadableAttachmentFileName(attachment.FileName)}\"?",
             "This removes the encrypted attachment from the note and deletes its attachment link from the editor.",
             true) { Owner = this };
         if (dlg.ShowDialog() != true) return;
@@ -3152,6 +3264,34 @@ public partial class MainWindow : Window
     {
         try { return Convert.FromBase64String(attachment.DataBase64 ?? "").LongLength; }
         catch { return 0; }
+    }
+
+    private static string GetAttachmentHash(NoteAttachment attachment)
+    {
+        if (!string.IsNullOrWhiteSpace(attachment.Sha256))
+            return attachment.Sha256;
+        return ComputeAttachmentHash(attachment.DataBase64);
+    }
+
+    private static string ComputeAttachmentHash(string base64)
+    {
+        try { return ComputeAttachmentHash(Convert.FromBase64String(base64 ?? "")); }
+        catch { return ""; }
+    }
+
+    private static string ComputeAttachmentHash(byte[] data)
+        => Convert.ToHexString(SHA256.HashData(data));
+
+    private static string GetReadableAttachmentFileName(string? fileName)
+    {
+        var name = (fileName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return "Attachment";
+
+        name = System.IO.Path.GetFileName(name);
+        name = Regex.Replace(name, @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-", "", RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"[_-]{2,}", "-");
+        return string.IsNullOrWhiteSpace(name) ? "Attachment" : name;
     }
 
     private static string FormatFileSize(long bytes)

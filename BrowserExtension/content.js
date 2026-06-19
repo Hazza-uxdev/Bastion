@@ -42,8 +42,20 @@
     return (hash >>> 0).toString(36);
   }
 
+  function normalizeHost(value) {
+    try {
+      return new URL(value).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return String(value || window.location.hostname || "")
+        .replace(/^https?:\/\//i, "")
+        .split("/")[0]
+        .replace(/^www\./i, "")
+        .toLowerCase();
+    }
+  }
+
   function promptKey(credential) {
-    const host = new URL(credential.url).hostname.replace(/^www\./i, "");
+    const host = normalizeHost(credential.url);
     return `${host}:${credential.username.toLowerCase()}:${hashString(credential.password)}`;
   }
 
@@ -172,6 +184,7 @@
     }
 
     passwordInput.addEventListener("change", () => setTimeout(maybePromptToSave, 900), true);
+    passwordInput.addEventListener("blur", () => setTimeout(maybePromptToSave, 900), true);
   }
 
   function setInputValue(input, value) {
@@ -267,14 +280,15 @@
     `;
 
     const accent = mode === "update" ? "#06b6d4" : "#7c3aed";
+    const host = normalizeHost(credential.url);
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;padding:12px 13px;border-bottom:1px solid #262626;">
-        <div style="width:28px;height:28px;border-radius:8px;background:${accent};display:grid;place-items:center;font-weight:700;color:white;">B</div>
+        <div style="width:28px;height:28px;border-radius:8px;background:${accent};display:grid;place-items:center;font-weight:700;color:white;box-shadow:0 0 0 1px rgba(255,255,255,0.12) inset;">B</div>
         <div style="min-width:0;">
           <div style="font-size:13px;font-weight:650;">${mode === "update" ? "Update saved login?" : "Save login to Bastion?"}</div>
-          <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(credential.username)}</div>
+          <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(host)} - ${escapeHtml(credential.username)}</div>
         </div>
-        <button data-close style="margin-left:auto;border:0;background:transparent;color:#777;cursor:pointer;font-size:18px;line-height:1;">×</button>
+        <button data-close style="margin-left:auto;border:0;background:transparent;color:#777;cursor:pointer;font-size:15px;line-height:1;">x</button>
       </div>
       <div style="padding:11px 13px 12px;">
         <div style="font-size:12px;color:#aaa;line-height:1.45;margin-bottom:12px;">${mode === "update" ? "Bastion found this username. Update the saved password?" : "Add this login to your encrypted vault?"}</div>

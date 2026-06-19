@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bastion Autofill",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Autofill and save credentials with the local Bastion vault",
   "permissions": ["activeTab", "storage", "scripting", "tabs", "webNavigation"],
   "host_permissions": ["http://localhost:59432/*", "<all_urls>"],

@@ -12,6 +12,7 @@ public partial class LoginWindow : Window
 {
     private System.Windows.Forms.NotifyIcon? _lockedTrayIcon;
     private bool _allowCloseFromTray;
+    private bool _shownFromTray;
 
     public LoginWindow()
     {
@@ -53,6 +54,7 @@ public partial class LoginWindow : Window
 
     private void ShowLoginFromTray()
     {
+        _shownFromTray = true;
         Show();
         WindowState = WindowState.Normal;
         Activate();
@@ -108,7 +110,7 @@ public partial class LoginWindow : Window
                 VaultStore.Save(new Vault(), password);
 
             var vault = VaultStore.Load(password);
-            var main = new MainWindow(vault, password, App.StartHiddenRequested);
+            var main = new MainWindow(vault, password, App.StartHiddenRequested && !_shownFromTray);
             main.Show();
             _allowCloseFromTray = true;
             Close();

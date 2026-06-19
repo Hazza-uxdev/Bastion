@@ -34,6 +34,7 @@ namespace SecureVault.Models
         public string FileName { get; set; } = "";
         public string ContentType { get; set; } = "";
         public string DataBase64 { get; set; } = "";
+        public string Sha256 { get; set; } = "";
         public DateTime AddedAt { get; set; } = DateTime.Now;
     }
 }

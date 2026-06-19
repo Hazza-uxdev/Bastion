@@ -126,7 +126,7 @@ public class BastionLocalApi : IDisposable
             // GET /bastion/ping
             if (path.EndsWith("/ping"))
             {
-                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.3\"}");
+                Write(ctx, "{\"status\":\"ok\",\"version\":\"1.0.4\"}");
                 return;
             }
 
@@ -136,7 +136,7 @@ public class BastionLocalApi : IDisposable
                 if (!_vault.Settings.AutofillEnabled) { Write(ctx, "[]"); return; }
                 var query = ctx.Request.QueryString["url"] ?? "";
                 var matches = _vault.Entries
-                    .Where(e => HostsMatch(e.Url, query))
+                    .Where(e => EntryMatchesQuery(e, query))
                     .Select(e => new { e.Id, e.Title, e.Username, e.Url })
                     .ToList();
                 Write(ctx, JsonSerializer.Serialize(matches, JsonOptions));
@@ -235,9 +235,11 @@ public class BastionLocalApi : IDisposable
     private VaultEntry? FindCredential(SaveCredentialRequest request)
     {
         var host = NormalizeHost(request.Url);
+        var username = (request.Username ?? "").Trim();
         return _vault.Entries.FirstOrDefault(e =>
-            HostsMatch(e.Url, host) &&
-            string.Equals(e.Username, request.Username, StringComparison.OrdinalIgnoreCase));
+            !e.IsDeleted &&
+            EntryMatchesQuery(e, host) &&
+            string.Equals(e.Username?.Trim(), username, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool TryApplyCors(HttpListenerContext ctx)
@@ -280,8 +282,13 @@ public class BastionLocalApi : IDisposable
 
         return entryHost == queryHost ||
                entryHost.EndsWith("." + queryHost, StringComparison.OrdinalIgnoreCase) ||
-               queryHost.EndsWith("." + entryHost, StringComparison.OrdinalIgnoreCase);
+               queryHost.EndsWith("." + entryHost, StringComparison.OrdinalIgnoreCase) ||
+               (!entryHost.Contains('.') && queryHost.StartsWith(entryHost + ".", StringComparison.OrdinalIgnoreCase)) ||
+               (!queryHost.Contains('.') && entryHost.StartsWith(queryHost + ".", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool EntryMatchesQuery(VaultEntry entry, string query)
+        => HostsMatch(entry.Url, query) || HostsMatch(entry.Title, query);
 
     private static string NormalizeHost(string value)
     {

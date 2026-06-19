@@ -111,6 +111,45 @@ namespace SecureVault
                          .SelectMany(g => g).ToList();
         }
 
+        public static List<VaultEntry> FindStale(IEnumerable<VaultEntry> entries, int days = 180)
+        {
+            var cutoff = DateTime.Now.AddDays(-days);
+            return entries
+                .Where(e => !e.IsDeleted && e.UpdatedAt < cutoff)
+                .OrderBy(e => e.UpdatedAt)
+                .ToList();
+        }
+
+        public static List<VaultEntry> FindMissingTotp(IEnumerable<VaultEntry> entries)
+            => entries
+                .Where(e => !e.IsDeleted && !e.HasTotp)
+                .OrderBy(e => e.Title)
+                .ToList();
+
+        public static PasswordHealthReport BuildReport(IEnumerable<VaultEntry> entries)
+        {
+            var active = entries.Where(e => !e.IsDeleted).ToList();
+            var scored = active
+                .Select(e => new PasswordHealthEntry(e, AnalyzePassword(e.Password)))
+                .ToList();
+
+            var weak = scored.Count(e => e.Health.Score < 70);
+            var veryWeak = scored.Count(e => e.Health.Score < 35);
+            var reused = FindReused(active).Count;
+            var duplicates = FindDuplicates(active).Count;
+            var stale = FindStale(active).Count;
+            var missingTotp = FindMissingTotp(active).Count;
+            var average = scored.Count == 0 ? 0 : (int)Math.Round(scored.Average(e => e.Health.Score));
+
+            var penalties = weak * 3 + veryWeak * 4 + reused * 5 + duplicates * 2 + stale + missingTotp;
+            var overall = Math.Clamp(average - penalties, 0, 100);
+            var summary = active.Count == 0
+                ? "No passwords saved yet."
+                : $"{active.Count} active passwords - {weak} weak, {reused} reused, {stale} older than 180 days, {missingTotp} without 2FA.";
+
+            return new PasswordHealthReport(overall, average, active.Count, weak, veryWeak, reused, duplicates, stale, missingTotp, summary);
+        }
+
         private static bool HasKeyboardOrAlphabetSequence(string value)
         {
             var lower = value.ToLowerInvariant();
@@ -178,5 +217,55 @@ namespace SecureVault
         public string Summary { get; }
         public IReadOnlyList<string> Issues { get; }
         public string Display => $"{Label} ({Score}%)";
+    }
+
+    public sealed class PasswordHealthEntry
+    {
+        public PasswordHealthEntry(VaultEntry entry, PasswordHealthResult health)
+        {
+            Entry = entry;
+            Health = health;
+        }
+
+        public VaultEntry Entry { get; }
+        public PasswordHealthResult Health { get; }
+    }
+
+    public sealed class PasswordHealthReport
+    {
+        public PasswordHealthReport(
+            int overallScore,
+            int averagePasswordScore,
+            int activePasswordCount,
+            int weakCount,
+            int veryWeakCount,
+            int reusedCount,
+            int duplicateCount,
+            int staleCount,
+            int missingTotpCount,
+            string summary)
+        {
+            OverallScore = overallScore;
+            AveragePasswordScore = averagePasswordScore;
+            ActivePasswordCount = activePasswordCount;
+            WeakCount = weakCount;
+            VeryWeakCount = veryWeakCount;
+            ReusedCount = reusedCount;
+            DuplicateCount = duplicateCount;
+            StaleCount = staleCount;
+            MissingTotpCount = missingTotpCount;
+            Summary = summary;
+        }
+
+        public int OverallScore { get; }
+        public int AveragePasswordScore { get; }
+        public int ActivePasswordCount { get; }
+        public int WeakCount { get; }
+        public int VeryWeakCount { get; }
+        public int ReusedCount { get; }
+        public int DuplicateCount { get; }
+        public int StaleCount { get; }
+        public int MissingTotpCount { get; }
+        public string Summary { get; }
     }
 }
