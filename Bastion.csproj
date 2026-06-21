@@ -6,9 +6,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Bastion.ico</ApplicationIcon>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Bastion_GitHub_Source\**;AthenaScholar\**;Sentinel\**;threatlens\**;release\**;_export_check_obj\**;_export_check_bin\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Bastion_GitHub_Source\**;AthenaScholar\**;Sentinel\**;threatlens\**;remix-of-triage-main\**;release\**;_export_check_obj\**;_export_check_bin\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Bastion.ico" />
+    <Resource Include="Assets\Bastion-mark-embedded-ui.png" />
   </ItemGroup>
 </Project>

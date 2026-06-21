@@ -1178,7 +1178,7 @@ public partial class MainWindow : Window
         }
 
         // Draw lines FIRST so they sit behind nodes
-        // Draw ALL notes with at least a faint background line to every neighbour (Obsidian style)
+        // Draw all notes with at least a faint background line to every neighbour.
         // plus brighter lines for actual references
         DrawGraphLines(notes, links);
 
@@ -2006,13 +2006,27 @@ public partial class MainWindow : Window
     {
         var token = _localApi?.Token ?? "API not running";
         new BastionDialog("Browser Extension",
-            $"The extension connects automatically when Bastion is open.\n\nToken file: {BastionLocalApi.TokenFilePath}\n\nToken rotates when Bastion starts and is removed when the vault is locked.", false).ShowDialog();
+            $"Session token:\n{token}\n\nThe browser extension normally connects automatically while Bastion is unlocked. This token is only for the local browser bridge on this computer.\n\nToken file:\n{BastionLocalApi.TokenFilePath}\n\nThe token rotates when Bastion starts and is removed when the vault locks.", false).ShowDialog();
+    }
+
+    private void OpenBrowserExtensionFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var extensionPath = System.IO.Path.Combine(AppContext.BaseDirectory, "BrowserExtension");
+        if (!Directory.Exists(extensionPath))
+        {
+            new BastionDialog("Browser Extension",
+                $"The browser extension folder was not found next to Bastion.exe.\n\nExpected location:\n{extensionPath}\n\nInstall Bastion from the MSI/EXE/ZIP release package, then load this folder as an unpacked extension in Chrome or Firefox.",
+                false) { Owner = this }.ShowDialog();
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(extensionPath) { UseShellExecute = true });
     }
 
     private void ShowEncryptedShareInfo_Click(object sender, RoutedEventArgs e)
     {
         new BastionDialog("Encrypted shares",
-            "Export encrypted share creates a .bastion-share file containing a password-protected copy of passwords, secure notes, tags, and note attachments.\n\nHow to export:\n1. Click Export encrypted share.\n2. Choose where to save the .bastion-share file.\n3. Send the file only through a channel you trust.\n\nHow to import:\n1. Click Import encrypted share.\n2. Choose the .bastion-share file.\n3. Enter the password that was used when it was exported.\n4. Bastion decrypts it and merges non-duplicate passwords and notes into this vault.\n\nExpired shares show a warning before import. Shares are for moving or sharing selected vault data; encrypted backups are better for full vault recovery.",
+            "Encrypted shares are portable .bastion-share files for moving or sharing selected vault data between Bastion installs.\n\nWhat is inside:\n- Password entries\n- Secure notes\n- Tags\n- Note attachments\n\nHow export works:\n1. Click Export share.\n2. Choose where to save the .bastion-share file.\n3. Bastion encrypts the share with your current master password.\n4. Send the file only through a channel you trust.\n\nHow import works:\n1. Click Import share.\n2. Pick the .bastion-share file.\n3. Enter the password that was used when the share was exported.\n4. Bastion decrypts the file and merges non-duplicate passwords and notes into this vault.\n\nWhat gets skipped:\n- Passwords that already match an existing title, username, URL, and password\n- Notes that already match an existing note ID or title/body pair\n\nImportant limits:\n- Shares expire after the metadata expiry date and Bastion will warn before import.\n- Shares are not full recovery backups. Use Create backup when you want a complete encrypted copy of the whole vault.\n- Anyone with the share file and export password can import its contents, so use a strong password and delete old shares when finished.",
             false).ShowDialog();
     }
 

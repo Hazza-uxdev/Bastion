@@ -116,6 +116,70 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SettingsColorExpander" TargetType="Expander">
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <StackPanel>
+                            <ToggleButton x:Name="HeaderToggle"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Content="{TemplateBinding Header}"
+                                          Cursor="Hand" Focusable="False">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="HeaderBg"
+                                                Background="#1E1E1E"
+                                                BorderBrush="#333333"
+                                                BorderThickness="1"
+                                                CornerRadius="7"
+                                                Padding="10,8">
+                                            <DockPanel>
+                                                <Path x:Name="Arrow"
+                                                      DockPanel.Dock="Right"
+                                                      Data="M 0 0 L 5 5 L 10 0"
+                                                      Stroke="#888888"
+                                                      StrokeThickness="1.6"
+                                                      Width="10"
+                                                      Height="6"
+                                                      Stretch="Uniform"
+                                                      VerticalAlignment="Center"
+                                                      Margin="10,0,0,0"/>
+                                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                                  VerticalAlignment="Center"/>
+                                            </DockPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="HeaderBg" Property="Background" Value="#252525"/>
+                                                <Setter TargetName="HeaderBg" Property="BorderBrush" Value="#4A4A4A"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="HeaderBg" Property="BorderBrush" Value="#7C3AED"/>
+                                                <Setter TargetName="Arrow" Property="Stroke" Value="#7C3AED"/>
+                                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                                    <Setter.Value>
+                                                        <RotateTransform Angle="180" CenterX="5" CenterY="3"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpandSite" Visibility="Collapsed" ContentSource="Content"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="#999999"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -623,9 +687,10 @@
                         <Button Content="✕" Width="28" Height="22" Margin="2,0" Click="CloseApp_Click"
                                 Style="{StaticResource DangerBtn}" Padding="0,0" FontSize="11"/>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0">
-                        <TextBlock Text="🔒" FontSize="11" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Image Source="Assets/Bastion-mark-embedded-ui.png" Width="20" Height="20"
+                           Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                           HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0"
+                           Opacity="0.92"/>
                 </Grid>
             </Border>
 
@@ -641,9 +706,41 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Bottom" Content="🔒  Lock Vault"
                                 Style="{StaticResource NavButton}" Margin="8,8" Click="Lock_Click"/>
-                        <StackPanel Margin="8,14,8,0">
-                            <TextBlock Text="BASTION" Foreground="#333333" FontSize="9"
-                                       FontWeight="SemiBold" Margin="14,0,0,14"/>
+                        <StackPanel Margin="8,12,8,0">
+                            <Grid Height="40" Margin="7,0,4,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="34"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0" Width="24" Height="24" Opacity="0.16"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#8B5CF6" Offset="0"/>
+                                            <GradientStop Color="Transparent" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                <Image Grid.Column="0" Source="Assets/Bastion-mark-embedded-ui.png"
+                                       Width="29" Height="29" Stretch="Uniform"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="Bastion"
+                                           FontSize="22" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="7,0,0,1">
+                                    <TextBlock.Foreground>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#E9DDFF" Offset="0"/>
+                                            <GradientStop Color="#A475FF" Offset="0.45"/>
+                                            <GradientStop Color="#7C3AED" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </TextBlock.Foreground>
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect Color="#7C3AED" BlurRadius="6"
+                                                          ShadowDepth="0" Opacity="0.18"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                            </Grid>
                             <Border x:Name="NavHomeBg" CornerRadius="5" Margin="4,1">
                                 <Button x:Name="BtnHome" Content="🏠  Home" Style="{StaticResource NavButton}" Click="Home_Click"/>
                             </Border>
@@ -775,34 +872,34 @@
                                         <TextBlock Text="Release Timeline" FontSize="15" FontWeight="SemiBold"
                                                    Foreground="#E8E8E8" DockPanel.Dock="Left"
                                                    Margin="0,0,15,0"/>
-                                        <TextBlock Text="Latest: v2.9.22" FontSize="11" Foreground="#7C3AED"
+                                        <TextBlock Text="Latest: v2.9.23" FontSize="11" Foreground="#7C3AED"
                                                    DockPanel.Dock="Right" VerticalAlignment="Center"/>
                                     </DockPanel>
 
                                     <StackPanel>
                                         <Border BorderBrush="#7C3AED" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,0,0,18">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.22" FontSize="13" FontWeight="SemiBold" Foreground="#E8E8E8"/>
-                                                <TextBlock Text="Browser reliability and security reports" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Added a searchable browser-extension credential picker with popup fill support across known page frames&#x0a;- Improved login/register/password-change field detection and added per-site ignored save prompts&#x0a;- Strengthened save/update duplicate checks for matching hosts, titles, usernames, and same-password entries&#x0a;- Added exportable password health reports with aged-password and missing-2FA details&#x0a;- Added per-entry password review age rules and session-cached breach checks&#x0a;- Added stronger password generator presets including strong, maximum, memorable passphrase, and PIN"
+                                                <TextBlock Text="v2.9.23" FontSize="13" FontWeight="SemiBold" Foreground="#E8E8E8"/>
+                                                <TextBlock Text="Branding, guides, and settings polish" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Added the new Bastion shield branding as embedded app resources with borderless in-app placement&#x0a;- Replaced the sidebar banner image tile with native gradient wordmark text and the embedded shield mark&#x0a;- Expanded the encrypted share guide with export, import, merge, expiry, backup, and safety details&#x0a;- Fixed long information dialogs so OK and close controls stay visible, including the share guide and session token window&#x0a;- Updated the locked-vault feature list to match current features and remove copied wording&#x0a;- Polished dark-mode Appearance colour picker dropdown headers"
                                                            TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
 
                                         <Border BorderBrush="#333333" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,0,0,18">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.21" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
-                                                <TextBlock Text="Roadmap polish and tray unlock fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Fixed unlocking Bastion from the locked tray window so it stays open instead of hiding again&#x0a;- Added attachment duplicate detection, clearer pasted-image names, attachment summaries, and Save As actions&#x0a;- Polished the browser extension prompt card and strengthened URL/title duplicate checks in the local bridge&#x0a;- Tuned graph relevance with shared topic weighting while keeping faint proximity links between notes&#x0a;- Added overall password health reporting with aged-password and missing-2FA views&#x0a;- Added a cross-platform migration plan while keeping WPF as the current Windows client"
+                                                <TextBlock Text="v2.9.22" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
+                                                <TextBlock Text="Browser reliability and security reports" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Added a searchable browser-extension credential picker with popup fill support across known page frames&#x0a;- Improved login/register/password-change field detection and added per-site ignored save prompts&#x0a;- Strengthened save/update duplicate checks for matching hosts, titles, usernames, and same-password entries&#x0a;- Added exportable password health reports with aged-password and missing-2FA details&#x0a;- Added per-entry password review age rules and session-cached breach checks&#x0a;- Added stronger password generator presets including strong, maximum, memorable passphrase, and PIN"
                                                            TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
 
                                         <Border BorderBrush="#333333" BorderThickness="2,0,0,0" Padding="12,0,0,0">
                                             <StackPanel>
-                                                <TextBlock Text="v2.9.20" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
-                                                <TextBlock Text="Installer first-launch vault fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
-                                                <TextBlock Text="- Fixed installed builds creating or opening the vault from the install folder instead of the user's app data folder&#x0a;- Moved the encrypted vault to %APPDATA%\Bastion\vault.dat for reliable first launch and normal Windows permissions&#x0a;- Added automatic migration from older relative vault.dat locations when a valid legacy vault is found&#x0a;- Improved login error messages so storage problems are shown separately from incorrect master passwords"
+                                                <TextBlock Text="v2.9.21" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC"/>
+                                                <TextBlock Text="Roadmap polish and tray unlock fix" FontSize="11" Foreground="#555555" Margin="0,2,0,8"/>
+                                                <TextBlock Text="- Fixed unlocking Bastion from the locked tray window so it stays open instead of hiding again&#x0a;- Added attachment duplicate detection, clearer pasted-image names, attachment summaries, and Save As actions&#x0a;- Polished the browser extension prompt card and strengthened URL/title duplicate checks in the local bridge&#x0a;- Tuned graph relevance with shared topic weighting while keeping faint proximity links between notes&#x0a;- Added overall password health reporting with aged-password and missing-2FA views&#x0a;- Added a cross-platform migration plan while keeping WPF as the current Windows client"
                                                            TextWrapping="Wrap" FontSize="12" Foreground="#BBBBBB"/>
                                             </StackPanel>
                                         </Border>
@@ -1122,7 +1219,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- GRAPH VIEW - Obsidian style -->
+                    <!-- GRAPH VIEW - note relevance map -->
                     <Grid x:Name="GraphView" Visibility="Collapsed" Background="#161616">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -1387,7 +1484,10 @@
                                             <CheckBox x:Name="RunInTrayCheck" Content="Keep Bastion running in the system tray when minimized or closed" Foreground="#999999" Margin="0,0,0,10" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
                                             <CheckBox x:Name="StartOnBootCheck" Content="Start Bastion when Windows starts" Foreground="#999999" Margin="0,0,0,10" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
                                             <CheckBox x:Name="StartHiddenToTrayCheck" Content="Start hidden in tray until unlocked" Foreground="#999999" Margin="0,0,0,12" Checked="TrayStartup_Changed" Unchecked="TrayStartup_Changed"/>
-                                            <Button Content="Show session token" Style="{StaticResource GhostBtn}" HorizontalAlignment="Left" Height="32" Padding="14,0" Click="ShowAutofillToken_Click" Margin="0,0,0,8"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <Button Content="Open extension folder" Style="{StaticResource GhostBtn}" HorizontalAlignment="Left" Height="32" Padding="14,0" Click="OpenBrowserExtensionFolder_Click" Margin="0,0,8,0"/>
+                                                <Button Content="Show session token" Style="{StaticResource GhostBtn}" HorizontalAlignment="Left" Height="32" Padding="14,0" Click="ShowAutofillToken_Click"/>
+                                            </StackPanel>
                                             <TextBlock Text="Load BrowserExtension/ as an unpacked Chrome or Firefox extension. Autofill only works after the vault is unlocked and locks again when the vault auto-locks."
                                                        Foreground="#666666" FontSize="12" TextWrapping="Wrap"/>
                                         </StackPanel>
@@ -1407,7 +1507,7 @@
                                         <StackPanel Grid.Column="1">
                                             <CheckBox x:Name="DarkThemeCheck" Content="Dark theme" Foreground="#999999" Margin="0,0,0,16" Checked="Theme_Changed" Unchecked="Theme_Changed"/>
                                             <UniformGrid Columns="2">
-                                                <Expander Margin="0,0,12,12" Foreground="#CCCCCC" Background="Transparent">
+                                                <Expander Style="{StaticResource SettingsColorExpander}" Margin="0,0,12,12">
                                                     <Expander.Header>
                                                         <DockPanel MinWidth="300">
                                                             <TextBlock Text="Accent color" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
@@ -1421,7 +1521,7 @@
                                                                MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
                                                     </Border>
                                                 </Expander>
-                                                <Expander Margin="12,0,0,12" Foreground="#CCCCCC" Background="Transparent">
+                                                <Expander Style="{StaticResource SettingsColorExpander}" Margin="12,0,0,12">
                                                     <Expander.Header>
                                                         <DockPanel MinWidth="300">
                                                             <TextBlock Text="Graph node" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
@@ -1435,7 +1535,7 @@
                                                                MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
                                                     </Border>
                                                 </Expander>
-                                                <Expander Margin="0,0,12,0" Foreground="#CCCCCC" Background="Transparent">
+                                                <Expander Style="{StaticResource SettingsColorExpander}" Margin="0,0,12,0">
                                                     <Expander.Header>
                                                         <DockPanel MinWidth="300">
                                                             <TextBlock Text="Graph hub" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
@@ -1449,7 +1549,7 @@
                                                                MouseMove="ColorMap_MouseMove" MouseLeftButtonUp="ColorMap_MouseLeftButtonUp"/>
                                                     </Border>
                                                 </Expander>
-                                                <Expander Margin="12,0,0,0" Foreground="#CCCCCC" Background="Transparent">
+                                                <Expander Style="{StaticResource SettingsColorExpander}" Margin="12,0,0,0">
                                                     <Expander.Header>
                                                         <DockPanel MinWidth="300">
                                                             <TextBlock Text="Graph line" FontSize="13" FontWeight="SemiBold" Width="118" VerticalAlignment="Center"/>
@@ -1469,7 +1569,7 @@
                                 </Border>
 
                                 <TextBlock Foreground="#555555" FontSize="12" Margin="2,2,0,0">
-                                    <Run Text="Bastion v2.9.22  ·  AES-256-GCM  ·  Local-first"/>
+                                    <Run Text="Bastion v2.9.23  ·  AES-256-GCM  ·  Local-first"/>
                                 </TextBlock>
                             </StackPanel>
                         </ScrollViewer>

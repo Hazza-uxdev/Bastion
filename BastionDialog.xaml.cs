@@ -15,7 +15,7 @@ namespace SecureVault
             {
                 CancelBtn.Visibility = Visibility.Collapsed;
                 ConfirmBtn.Content = "OK";
-                IconText.Text = "✓";
+                IconText.Text = "i";
             }
         }
 

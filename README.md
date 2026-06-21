@@ -1,7 +1,7 @@
 # 🔐 Bastion
 
 Bastion is a modern, offline-first Windows password vault built with WPF (.NET).
-It securely stores passwords, recovery phrases, secure notes, encrypted attachments, and crypto tracking data — all encrypted locally.
+It securely stores passwords, recovery phrases, secure notes, file attachments, and password-health data — all encrypted locally.
 
 Your data never leaves your device.
 
@@ -11,19 +11,20 @@ Your data never leaves your device.
 
 - Encrypted password manager
 - Home dashboard with vault statistics
-- Secure notes with tags and image/file attachments
-- Relevance graph for connected notes
-- Crypto portfolio tracking (CoinGecko)
+- Secure notes with tags, folders, inline image previews, and file attachments
+- Password health reporting and stronger password scoring
+- Browser extension autofill bridge for Chrome and Firefox
+- Encrypted share export/import workflow
+- Optional encrypted vault backup and restore workflow
 - Fast search and filtering
 - CSV import support
-- Encrypted share import/export
-- Optional encrypted vault backup workflow
 - Auto-lock on inactivity
 - Clipboard timeout settings
-- Browser extension autofill bridge
-- Tray/background mode for keeping autofill available while unlocked
-- Windows startup and hidden-to-tray startup options
-- Dark/light theme with custom accent and graph colors
+- Tray/background mode with startup options
+- Graph view for note relationship mapping
+- Dark/light theme support with custom accent and graph colours
+- Trash recovery and permanent deletion
+- Clean modern UI
 
 ---
 
@@ -42,11 +43,11 @@ Your data never leaves your device.
 1. Clone the repository
 
    git clone https://github.com/Hazza-uxdev/bastion.git  
-   cd bastion  
+   cd bastion
 
 2. Open the solution
 
-   Open Bastion.csproj in Visual Studio 2022
+   Open Bastion.sln in Visual Studio 2022
 
 3. Restore dependencies
 
@@ -80,6 +81,16 @@ Your data never leaves your device.
 
 ---
 
+### Option 3: Use a GitHub Release Build
+
+Download one of the Windows release assets:
+
+- Bastion-v2.9.23-win-x64.zip
+- Bastion-v2.9.23-win-x64.msi
+- BastionSetup-v2.9.23-win-x64.exe
+
+---
+
 ## 🚀 First Launch
 
 - Create a master password
@@ -90,17 +101,18 @@ Your data never leaves your device.
 
 ## 📁 Data Storage
 
-All encrypted data is stored locally at:
+All encrypted vault data is stored locally at:
 
 %APPDATA%/Bastion/
 
 This includes:
-- Encrypted vault
+- Encrypted vault data
 - Secure notes
-- Note attachments
-- Crypto preferences
-- Cached coin lists
-- Browser extension session token
+- Password entries
+- File attachments
+- User preferences
+- Browser-extension bridge state
+- Backup and share metadata
 
 ---
 
@@ -111,8 +123,10 @@ This includes:
 - No telemetry
 - Offline-first design
 - Auto-lock on inactivity
-- Clipboard timeout cleanup
-- Encrypted backup and share workflows
+- Optional clipboard timeout
+- Password health reporting
+- Encrypted share files require the export password to import
+- Release builds embed Bastion branding as compiled WPF resources instead of loose image files
 
 ---
 
@@ -120,7 +134,9 @@ This includes:
 
 - C# (.NET 8)
 - WPF (XAML)
-- CoinGecko API
+- Windows Forms tray integration
+- Supabase-backed Citadel tracker integration docs
+- Chrome/Firefox browser extension
 
 ---
 
@@ -130,7 +146,15 @@ This includes:
 - More browser extension polish
 - Additional graph relevance tuning
 - Password health reporting improvements
-- Cross-platform support
+- Citadel bug and roadmap tracker workflow
+- Cross-platform support planning
+
+---
+
+## 📝 Release Notes Policy
+
+The in-app release timeline is reserved for meaningful feature work, bug fixes, security fixes, and packaging changes.
+Small visual-only polish, wording tweaks, and image placement corrections should not bump the app version on their own.
 
 ---
 

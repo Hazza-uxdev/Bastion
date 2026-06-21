@@ -1,9 +1,9 @@
 #define MyAppName "Bastion"
 #ifndef MyAppVersion
-#define MyAppVersion "2.9.22"
+#define MyAppVersion "2.9.23"
 #endif
 #ifndef PublishDir
-#define PublishDir "..\release\Bastion-v2.9.22-win-x64"
+#define PublishDir "..\release\Bastion-v2.9.23-win-x64"
 #endif
 #ifndef OutputDir
 #define OutputDir "..\release\installer-exe"

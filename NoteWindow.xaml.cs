@@ -3,7 +3,7 @@ using SecureVault.Models;
 
 namespace SecureVault
 {
-    // NoteWindow is no longer used — notes are edited inline in the Obsidian-style editor.
+    // NoteWindow is no longer used; notes are edited inline in the main notes workspace.
     public partial class NoteWindow : Window
     {
         public SecureNote Note { get; private set; } = new SecureNote();

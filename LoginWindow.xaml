@@ -78,15 +78,19 @@
             <!-- LEFT: Branding -->
             <Border Grid.Column="0" Background="#111111">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Border Width="68" Height="68" CornerRadius="14" HorizontalAlignment="Center" Margin="0,0,0,22">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                <GradientStop Color="#7C3AED" Offset="0"/>
-                                <GradientStop Color="#4C1D95" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <TextBlock Text="🔒" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <Grid Width="112" Height="112" HorizontalAlignment="Center" Margin="0,0,0,18">
+                        <Ellipse Width="98" Height="98" Opacity="0.14">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#8B5CF6" Offset="0"/>
+                                    <GradientStop Color="Transparent" Offset="1"/>
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Image Source="Assets/Bastion-mark-embedded-ui.png" Width="94" Height="94"
+                               Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                     <TextBlock Text="Bastion" FontSize="26" FontWeight="Bold"
                                Foreground="#DCDDDE" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
                     <TextBlock Text="Your encrypted knowledge base"
@@ -100,15 +104,15 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
                             <Ellipse Width="5" Height="5" Fill="#7C3AED" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Obsidian-style notes editor" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Secure notes and attachments" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
                             <Ellipse Width="5" Height="5" Fill="#7C3AED" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Password manager" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Password manager with health reports" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
                             <Ellipse Width="5" Height="5" Fill="#7C3AED" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Live crypto tracker" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Local browser autofill bridge" Foreground="#444444" FontSize="12" FontFamily="Segoe UI"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>

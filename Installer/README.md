@@ -4,9 +4,9 @@ This folder contains packaging files for GitHub release builds.
 
 ## Outputs
 
-- `Bastion-v2.9.22-win-x64.zip`
-- `Bastion-v2.9.22-win-x64.msi`
-- `BastionSetup-v2.9.22-win-x64.exe`
+- `Bastion-v2.9.23-win-x64.zip`
+- `Bastion-v2.9.23-win-x64.msi`
+- `BastionSetup-v2.9.23-win-x64.exe`
 
 ## Requirements
 
@@ -21,7 +21,7 @@ The build script always creates the publish folder and zip. It creates the MSI a
 Run from the project root:
 
 ```powershell
-.\Installer\build-installers.ps1 -Version 2.9.22
+.\Installer\build-installers.ps1 -Version 2.9.23
 ```
 
 The published app and installer assets are written to:
