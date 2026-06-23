@@ -13,20 +13,32 @@ public partial class LoginWindow : Window
     private System.Windows.Forms.NotifyIcon? _lockedTrayIcon;
     private bool _allowCloseFromTray;
     private bool _shownFromTray;
+    private readonly bool _startHiddenToTray;
 
-    public LoginWindow()
+    public LoginWindow() : this(false)
     {
+    }
+
+    public LoginWindow(bool startHiddenToTray)
+    {
+        _startHiddenToTray = startHiddenToTray;
         InitializeComponent();
         UpdateWatermark();
         StatusText.Visibility = Visibility.Collapsed;
         Loaded += LoginWindow_Loaded;
+        App.ActivationRequested += App_ActivationRequested;
     }
 
     private void LoginWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        if (!App.StartHiddenRequested) return;
+        if (!_startHiddenToTray && !App.StartHiddenRequested) return;
         EnsureLockedTrayIcon();
         Hide();
+    }
+
+    private void App_ActivationRequested()
+    {
+        Dispatcher.Invoke(ShowLoginFromTray);
     }
 
     private void EnsureLockedTrayIcon()
@@ -110,7 +122,7 @@ public partial class LoginWindow : Window
                 VaultStore.Save(new Vault(), password);
 
             var vault = VaultStore.Load(password);
-            var main = new MainWindow(vault, password, App.StartHiddenRequested && !_shownFromTray);
+            var main = new MainWindow(vault, password, (_startHiddenToTray || App.StartHiddenRequested) && !_shownFromTray);
             main.Show();
             _allowCloseFromTray = true;
             Close();
@@ -144,6 +156,7 @@ public partial class LoginWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        App.ActivationRequested -= App_ActivationRequested;
         _lockedTrayIcon?.Dispose();
         _lockedTrayIcon = null;
         base.OnClosed(e);

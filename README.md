@@ -85,9 +85,9 @@ Your data never leaves your device.
 
 Download one of the Windows release assets:
 
-- Bastion-v2.9.23-win-x64.zip
-- Bastion-v2.9.23-win-x64.msi
-- BastionSetup-v2.9.23-win-x64.exe
+- Bastion-v2.9.25-win-x64.zip
+- Bastion-v2.9.25-win-x64.msi
+- BastionSetup-v2.9.25-win-x64.exe
 
 ---
 
@@ -155,6 +155,8 @@ This includes:
 
 The in-app release timeline is reserved for meaningful feature work, bug fixes, security fixes, and packaging changes.
 Small visual-only polish, wording tweaks, and image placement corrections should not bump the app version on their own.
+
+After every real version update, the README should be refreshed with the current feature list, roadmap, and release asset names.
 
 ---
 

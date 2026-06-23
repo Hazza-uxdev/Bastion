@@ -69,6 +69,7 @@ public partial class MainWindow : Window
         _vault = vault;
         _password = password;
         _startHiddenToTray = startHiddenToTray;
+        App.ActivationRequested += App_ActivationRequested;
 
         _lockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(_lockMinutes) };
         _lockTimer.Tick += (_, _) => Lock();
@@ -218,6 +219,11 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    private void App_ActivationRequested()
+    {
+        Dispatcher.Invoke(ShowFromTray);
+    }
+
     private void ExitFromTray()
     {
         _allowExit = true;
@@ -293,6 +299,7 @@ public partial class MainWindow : Window
     private void Lock_Click(object sender, RoutedEventArgs e) => Lock();
     private void Lock()
     {
+        var shouldKeepLockedWindowInTray = _vault?.Settings?.RunInTray == true && !IsVisible;
         SaveCurrentNote();
         _lockTimer.Stop();
         _totpTimer.Stop();
@@ -300,7 +307,7 @@ public partial class MainWindow : Window
         _localApi?.Stop();
         _trayIcon?.Dispose();
         _trayIcon = null;
-        new LoginWindow().Show();
+        new LoginWindow(shouldKeepLockedWindowInTray).Show();
         _allowExit = true;
         Close();
     }
@@ -417,6 +424,33 @@ public partial class MainWindow : Window
             entries = entries.Where(e => e.Tags.Contains(_activePasswordTagFilter));
         VaultList.ItemsSource = entries.ToList();
         RefreshPasswordTagsPanel();
+        UpdatePasswordListColumnWidths();
+    }
+
+    private void VaultList_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdatePasswordListColumnWidths();
+    }
+
+    private void UpdatePasswordListColumnWidths()
+    {
+        if (VaultList == null || VaultList.ActualWidth <= 0 ||
+            PasswordTitleColumn == null || PasswordUsernameColumn == null ||
+            PasswordTagsColumn == null || PasswordTotpColumn == null || PasswordValueColumn == null)
+            return;
+
+        var available = Math.Max(520, VaultList.ActualWidth - 26);
+        var title = Math.Max(145, Math.Round(available * 0.24));
+        var username = Math.Max(145, Math.Round(available * 0.23));
+        var tags = Math.Max(105, Math.Round(available * 0.16));
+        var totp = Math.Max(82, Math.Round(available * 0.10));
+        var password = Math.Max(135, available - title - username - tags - totp);
+
+        PasswordTitleColumn.Width = title;
+        PasswordUsernameColumn.Width = username;
+        PasswordTagsColumn.Width = tags;
+        PasswordTotpColumn.Width = totp;
+        PasswordValueColumn.Width = password;
     }
 
     private void SyncVaultTags()
@@ -3660,6 +3694,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        App.ActivationRequested -= App_ActivationRequested;
         _trayIcon?.Dispose();
         _trayIcon = null;
         base.OnClosed(e);
